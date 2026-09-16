@@ -3,7 +3,7 @@ import HerdrKit
 import SwiftUI
 
 struct RootView: View {
-    // Owned by AppDelegate so it outlives the window — see AppDelegate in HerdrMApp.swift.
+    // Owned by AppDelegate so it outlives the window — see AppDelegate in GooseAgentApp.swift.
     @ObservedObject var model: AppModel
     // Deliberately not persisted: the app always launches with the sidebar visible.
     @State private var sidebarCollapsed = false

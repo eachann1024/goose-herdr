@@ -1,6 +1,6 @@
-name: HerdrM
+name: GooseHerdr
 options:
-  bundleIdPrefix: dev.bybee
+  bundleIdPrefix: dev.eachann
   deploymentTarget:
     macOS: "14.0"
   xcodeVersion: "16.0"
@@ -22,11 +22,11 @@ packages:
     # version scheme is <major.minor>.<UTC yyyymmdd>, so `from:` would drift.
     exactVersion: "1.6.20260909"
 targets:
-  HerdrM:
+  GooseAgent:
     type: application
     platform: macOS
     sources:
-      - Sources/HerdrM
+      - Sources/GooseAgent
       - path: Resources
         buildPhase: resources
         excludes:
@@ -39,7 +39,7 @@ targets:
       - package: GhosttyTerminal
         product: GhosttyTerminal
     info:
-      path: Sources/HerdrM/Info.plist
+      path: Sources/GooseAgent/Info.plist
       properties:
         CFBundleName: "Goose Agent"
         CFBundleDisplayName: "Goose Agent"
@@ -56,7 +56,7 @@ targets:
           - zh-Hans
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.bybee.herdrm
+        PRODUCT_BUNDLE_IDENTIFIER: dev.eachann.goose-herdr
         PRODUCT_NAME: "Goose Agent"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         SWIFT_VERSION: "5.10"
@@ -79,12 +79,12 @@ targets:
           ONLY_ACTIVE_ARCH: NO
           ARCHS: "arm64 x86_64"
 
-  HerdrMobile:
+  GooseAgentMobile:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
     sources:
-      - Sources/HerdrMobile
+      - Sources/GooseAgentobile
     dependencies:
       - package: HerdrKit
       - package: HerdrSSH
@@ -93,7 +93,7 @@ targets:
       - package: GhosttyTerminal
         product: GhosttyTerminal
     info:
-      path: Sources/HerdrMobile/Info.plist
+      path: Sources/GooseAgentMobile/Info.plist
       properties:
         CFBundleName: "Goose Agent"
         CFBundleDisplayName: "Goose Agent"
@@ -115,7 +115,7 @@ targets:
           the herdr session running on them.
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: dev.bybee.herdrm.ios
+        PRODUCT_BUNDLE_IDENTIFIER: dev.eachann.goose-herdr.ios
         PRODUCT_NAME: "Goose Agent"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         TARGETED_DEVICE_FAMILY: "1,2"

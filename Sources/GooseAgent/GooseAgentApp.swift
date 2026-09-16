@@ -56,7 +56,7 @@ extension FocusedValues {
 }
 
 @main
-struct HerdrMApp: App {
+struct GooseAgentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("app.theme") private var themePreference = "system"
     @FocusedValue(\.appModel) private var focusedModel

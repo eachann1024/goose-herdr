@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct HerdrMobileApp: App {
+struct GooseAgentMobileApp: App {
     @State private var model = MobileAppModel()
     @Environment(\.scenePhase) private var scenePhase
 
