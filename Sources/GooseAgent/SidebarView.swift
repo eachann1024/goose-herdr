@@ -39,8 +39,6 @@ struct SidebarView: View {
     @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
     @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
     @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
-    @State private var hoveredAction: SidebarActionID?
-    @State private var headerHoveredSection: SidebarSectionID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -200,17 +198,6 @@ struct SidebarView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
-                if hoveredAction == id {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textGhost)
-                        .frame(width: 20, height: 20)
-                        .onTapGesture {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                hideAction(id)
-                            }
-                        }
-                }
             }
             .padding(.horizontal, 4)
             .frame(height: 32)
@@ -218,24 +205,9 @@ struct SidebarView: View {
         }
         .buttonStyle(SidebarRowButtonStyle())
         .focusEffectDisabled()
-        .onHover { hovering in
-            hoveredAction = hovering ? id : (hoveredAction == id ? nil : hoveredAction)
-        }
-        .contextMenu {
-            Button(id.hideHelp) { hideAction(id) }
-        }
         .help(id.title)
     }
 
-    private func hideAction(_ id: SidebarActionID) {
-        switch id {
-        case .newAgent: newAgentHidden = true
-        case .newTerminal: newTerminalHidden = true
-        case .newSpace: newSpaceHidden = true
-        case .files: filesHidden = true
-        case .search: searchHidden = true
-        }
-    }
 
     private func groupHeader(
         _ title: LocalizedStringKey,
@@ -276,46 +248,11 @@ struct SidebarView: View {
 
             trailing()
 
-            if headerHoveredSection == section {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        hideSection(section)
-                    }
-                } label: {
-                    Image(systemName: "eye.slash")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textGhost)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .focusEffectDisabled()
-                .help(section.hideHelp)
-
-                .transition(.opacity)
-            }
         }
         .padding(.horizontal, 8)
         .frame(height: 28)
-        .onHover { hovering in
-            headerHoveredSection = hovering ? section : (
-                headerHoveredSection == section ? nil : headerHoveredSection
-            )
-        }
-        .contextMenu {
-            Button(section.hideHelp) {
-                hideSection(section)
-            }
-        }
     }
 
-    private func hideSection(_ section: SidebarSectionID) {
-        switch section {
-        case .spaces: spacesHidden = true
-        case .agents: agentsHidden = true
-        case .terminals: terminalsHidden = true
-        }
-    }
 
     private var allSpacesRow: some View {
         let selected = model.selectedSpace == nil

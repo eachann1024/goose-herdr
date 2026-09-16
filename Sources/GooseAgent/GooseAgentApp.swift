@@ -246,7 +246,7 @@ struct SettingsView: View {
             AboutSettingsView()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 560, height: 520)
+        .frame(minWidth: 480, idealWidth: 520, minHeight: 360)
         .herdrmHideFocusRing()
     }
 }
@@ -482,7 +482,7 @@ struct AppearanceSettingsView: View {
             Toggle("Spaces", isOn: Binding(get: { !spacesHidden }, set: { spacesHidden = !$0 }))
             Toggle("Agents", isOn: Binding(get: { !agentsHidden }, set: { agentsHidden = !$0 }))
             Toggle("Terminals", isOn: Binding(get: { !terminalsHidden }, set: { terminalsHidden = !$0 }))
-            Text("Turn items off one by one. Show them again here.")
+            Text("在这里逐项开关侧栏内容。")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
