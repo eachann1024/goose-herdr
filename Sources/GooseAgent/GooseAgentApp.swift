@@ -199,7 +199,7 @@ struct GooseAgentApp: App {
             }
 
             CommandGroup(after: .sidebar) {
-                // ⌘1…8 → nth session in sidebar order (Agents → Terminals → local shells).
+                // ⌘1…8 → nth session in sidebar order (mixed sessions → local shells).
                 // ⌘9 → last session (browser-style). Scoped by selected space when any.
                 Button("Go to Session 1") {
                     focusedModel?.selectSwitchableSession(number: 1)

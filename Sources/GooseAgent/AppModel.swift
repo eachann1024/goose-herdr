@@ -579,6 +579,13 @@ final class AppModel: ObservableObject {
             }
             return String(localized: "Terminal")
         }
+
+        var pathDisplay: String? {
+            guard let cwd = pane.cwd?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !cwd.isEmpty
+            else { return nil }
+            return (cwd as NSString).abbreviatingWithTildeInPath
+        }
     }
 
     enum AttachedEntry: Identifiable {
@@ -618,6 +625,13 @@ final class AppModel: ObservableObject {
             switch self {
             case .agent(let entry): return entry.agent.workspaceID
             case .terminal(let entry): return entry.pane.workspaceID
+            }
+        }
+
+        var tabID: String? {
+            switch self {
+            case .agent(let entry): return entry.agent.tabID
+            case .terminal(let entry): return entry.tabID
             }
         }
 
@@ -701,6 +715,24 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Agents and terminals in one herdr tab order. Sidebar has no type groups,
+    /// so a new tab (appended by `tab.create`) lands at the bottom of the list.
+    var visibleSessions: [AttachedEntry] {
+        let entries = visibleAgents.map(AttachedEntry.agent)
+            + visibleTerminals.map(AttachedEntry.terminal)
+        let deviceRank = Dictionary(uniqueKeysWithValues: devicesInScope.enumerated().map { ($1.id, $0) })
+        return entries.sorted { lhs, rhs in
+            let d0 = deviceRank[lhs.device.id] ?? Int.max
+            let d1 = deviceRank[rhs.device.id] ?? Int.max
+            if d0 != d1 { return d0 < d1 }
+            let w0 = workspaceRank(deviceID: lhs.device.id, workspaceID: lhs.workspaceID)
+            let w1 = workspaceRank(deviceID: rhs.device.id, workspaceID: rhs.workspaceID)
+            if w0 != w1 { return w0 < w1 }
+            return tabRank(deviceID: lhs.device.id, tabID: lhs.tabID)
+                < tabRank(deviceID: rhs.device.id, tabID: rhs.tabID)
+        }
+    }
+
     func isUnread(_ entry: AgentEntry) -> Bool {
         unreadAgents.contains(AgentUnreadKey(deviceID: entry.device.id, paneID: entry.agent.paneID))
     }
@@ -757,7 +789,7 @@ final class AppModel: ObservableObject {
     }
 
     private var firstVisiblePaneRef: PaneRef? {
-        visibleAgents.first?.ref ?? visibleTerminals.first?.ref
+        visibleSessions.first?.ref
     }
 
     func agentCount(in entry: SpaceEntry) -> Int {
@@ -947,34 +979,32 @@ final class AppModel: ObservableObject {
     func selectShell(_ id: UUID) {
         isFileManagerActive = false
         selectedShellID = id
-        ShellViewRegistry.focus(id)
+        restoreTerminalFocus()
     }
 
-    /// Sidebar order for ⌘1…9: Agents → remote Terminals → local shell sessions,
-    /// already filtered by the selected space (when any).
+    /// Sidebar order for ⌘1…9: mixed agent/terminal rows, then local shells.
+    /// Already filtered by the selected space (when any).
     enum SwitchableSession: Equatable {
         case agent(PaneRef)
         case shell(UUID)
     }
 
     var switchableSessions: [SwitchableSession] {
-        var items: [SwitchableSession] = visibleAgents.map { .agent($0.ref) }
-        items += visibleTerminals.map { .agent($0.ref) }
+        var items: [SwitchableSession] = visibleSessions.map { .agent($0.ref) }
         items += shellSessions.map { .shell($0.id) }
         return items
     }
 
     /// `number` is 1…9. ⌘9 jumps to the last item (browser-style); ⌘1…8 are fixed slots.
+    func sessionSwitchNumber(for session: SwitchableSession) -> Int? {
+        let items = switchableSessions
+        guard let index = items.firstIndex(of: session) else { return nil }
+        return SessionSwitchIndex.number(forIndex: index, count: items.count)
+    }
+
     func selectSwitchableSession(number: Int) {
         let items = switchableSessions
-        guard !items.isEmpty, (1...9).contains(number) else { return }
-        let index: Int
-        if number == 9 {
-            index = items.count - 1
-        } else {
-            guard number - 1 < items.count else { return }
-            index = number - 1
-        }
+        guard let index = SessionSwitchIndex.index(forNumber: number, count: items.count) else { return }
         switch items[index] {
         case .agent(let ref):
             selectAgent(ref)
@@ -1387,7 +1417,7 @@ final class AppModel: ObservableObject {
             previousStatuses[deviceID] = Dictionary(
                 uniqueKeysWithValues: snapshot.agents.map { ($0.paneID, $0.status) }
             )
-            let previousPaneOrder = visibleAgents.map(\.ref) + visibleTerminals.map(\.ref)
+            let previousPaneOrder = visibleSessions.map(\.ref)
             let previousWorkspaces = sessions[deviceID]?.workspaces ?? []
             let liveIDs = Set(snapshot.workspaces.map(\.workspaceID))
             retainDisappearedSpaces(
@@ -1815,31 +1845,17 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Reorders an agent tab by dropping it on another agent in the same space.
+    /// Reorders a session tab by dropping it on another session in the same space.
     /// Cross-space and cross-device drops are ignored (`tab.move` is in-workspace).
-    func moveAgent(_ source: AgentEntry, onto target: AgentEntry, placeAfter: Bool) {
+    func moveSession(_ source: AttachedEntry, onto target: AttachedEntry, placeAfter: Bool) {
         guard source.device.id == target.device.id,
-              source.agent.workspaceID == target.agent.workspaceID
-        else { return }
-        moveTab(
-            device: source.device,
-            workspaceID: source.agent.workspaceID,
-            moving: source.agent.tabID,
-            onto: target.agent.tabID,
-            placeAfter: placeAfter
-        )
-    }
-
-    /// Same `tab.move` path as agents. Cross-space / cross-device drops are ignored.
-    func moveTerminal(_ source: TerminalEntry, onto target: TerminalEntry, placeAfter: Bool) {
-        guard source.device.id == target.device.id,
-              source.pane.workspaceID == target.pane.workspaceID,
+              source.workspaceID == target.workspaceID,
               let moving = source.tabID,
               let onto = target.tabID
         else { return }
         moveTab(
             device: source.device,
-            workspaceID: source.pane.workspaceID,
+            workspaceID: source.workspaceID,
             moving: moving,
             onto: onto,
             placeAfter: placeAfter

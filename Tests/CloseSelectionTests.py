@@ -8,7 +8,7 @@ source = (Path(__file__).resolve().parents[1] / "Sources/GooseAgent/AppModel.swi
 start = source.index("            if let selected = selectedPane, selected.deviceID == deviceID,")
 end = source.index("            if let space = selectedSpace", start)
 selection = source[start:end]
-assert source.index("let previousPaneOrder = visibleAgents.map") < source.index(
+assert source.index("let previousPaneOrder = visibleSessions.map") < source.index(
     "sessions[deviceID]?.agents = snapshot.agents"
 ), "capture sidebar order before replacing the snapshot"
 
@@ -21,8 +21,7 @@ func refreshed(
     terminals: [PaneRef] = [], deviceID: UUID
 ) -> PaneRef? {
     var selectedPane = selected
-    let visibleAgents = agents.map { Entry(ref: $0) }
-    let visibleTerminals = terminals.map { Entry(ref: $0) }
+    let visibleSessions = (agents + terminals).map { Entry(ref: $0) }
     let paneIDs = Set((agents + terminals).filter { $0.deviceID == deviceID }.map(\.paneID))
 ''' + selection + r'''
     return selectedPane

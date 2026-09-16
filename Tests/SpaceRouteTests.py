@@ -103,12 +103,21 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
     var selectedPane: PaneRef?
     var selectedShellID: UUID?
     var shellSessions: [ShellSession] = []
-    var selectedAttachedEntry: AttachedStub?
+    var lastPaneBySpace: [SpaceRef: PaneRef] = [:]
+    var attachSessions: [AttachedStub] = []
+    var panesByWorkspace: [String: [PaneRef]] = [:]
+    var selectedAttachedEntry: AttachedStub? {
+        guard let selectedPane, let device = device(selectedPane.deviceID),
+              let workspaceID = panesByWorkspace.first(where: { $0.value.contains(selectedPane) })?.key
+        else { return nil }
+        return AttachedStub(device: device, workspaceID: workspaceID)
+    }
     var isFileManagerActive = false
     var actionError: String?
     var started: [(UUID, String)] = []
     var shells: [UUID] = []
     var launched: [(UUID, String, String?)] = []
+    var focusRequests = 0
     private var states: [UUID: DeviceState] = [:]
 
     func stubWorkspaces(_ id: UUID, _ ids: [String]) {
@@ -116,7 +125,15 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
     }
     func session(_ id: UUID) -> DeviceState { states[id] ?? DeviceState() }
     func device(_ id: UUID) -> Device? { devices.first { $0.id == id } }
-    var firstVisiblePaneRef: PaneRef? { nil }
+    var visibleAgents: [AgentEntryStub] {
+        if let space = selectedSpace {
+            return (panesByWorkspace[space.workspaceID] ?? []).map { AgentEntryStub(ref: $0) }
+        }
+        return panesByWorkspace.values.flatMap { $0 }.map { AgentEntryStub(ref: $0) }
+    }
+    var visibleTerminals: [AgentEntryStub] { [] }
+    var visibleSessions: [AgentEntryStub] { visibleAgents + visibleTerminals }
+    var firstVisiblePaneRef: PaneRef? { visibleSessions.first?.ref }
     func preferredVisibleAgent() -> AgentEntryStub? { nil }
     func startNewTerminal(device: Device, workspaceID: String) { started.append((device.id, workspaceID)) }
     func newShellSession(on device: Device) { shells.append(device.id) }

@@ -24,10 +24,8 @@ struct SidebarView: View {
     @State private var deviceButtonHovered = false
     @State private var draggingSpaceID: String?
     @State private var spaceDrop: (id: String, after: Bool)?
-    @State private var draggingAgentID: String?
-    @State private var agentDrop: (id: String, after: Bool)?
-    @State private var draggingTerminalID: String?
-    @State private var terminalDrop: (id: String, after: Bool)?
+    @State private var draggingSessionID: String?
+    @State private var sessionDrop: (id: String, after: Bool)?
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
     @AppStorage(SidebarSectionID.spacesExpandedKey) private var spacesExpanded = true
     @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
@@ -35,6 +33,7 @@ struct SidebarView: View {
     @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
     @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
     @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
+    @StateObject private var sessionIndexHints = SessionIndexHintController()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -101,30 +100,32 @@ struct SidebarView: View {
                     }
 
                     Group {
-                            if model.visibleAgents.isEmpty
-                                && model.visibleTerminals.isEmpty
-                                && model.shellSessions.isEmpty {
+                            if model.visibleSessions.isEmpty && model.shellSessions.isEmpty {
                                 Text(emptySessionsHint)
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Theme.textGhost)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(8)
                             }
-                            ForEach(model.visibleAgents) { entry in
-                                AgentRowView(
-                                    entry: entry,
-                                    model: model,
-                                    draggingAgentID: $draggingAgentID,
-                                    agentDrop: $agentDrop
-                                )
-                            }
-                            ForEach(model.visibleTerminals) { entry in
-                                TerminalRowView(
-                                    entry: entry,
-                                    model: model,
-                                    draggingTerminalID: $draggingTerminalID,
-                                    terminalDrop: $terminalDrop
-                                )
+                            ForEach(model.visibleSessions) { entry in
+                                switch entry {
+                                case .agent(let agent):
+                                    AgentRowView(
+                                        entry: agent,
+                                        model: model,
+                                        showIndexHints: sessionIndexHints.isShowing,
+                                        draggingSessionID: $draggingSessionID,
+                                        sessionDrop: $sessionDrop
+                                    )
+                                case .terminal(let terminal):
+                                    TerminalRowView(
+                                        entry: terminal,
+                                        model: model,
+                                        showIndexHints: sessionIndexHints.isShowing,
+                                        draggingSessionID: $draggingSessionID,
+                                        sessionDrop: $sessionDrop
+                                    )
+                                }
                             }
                             ForEach(model.shellSessions) { session in
                                 shellRow(session)
@@ -280,33 +281,51 @@ struct SidebarView: View {
     private struct TerminalRowView: View {
         let entry: AppModel.TerminalEntry
         @ObservedObject var model: AppModel
-        @Binding var draggingTerminalID: String?
-        @Binding var terminalDrop: (id: String, after: Bool)?
+        var showIndexHints = false
+        @Binding var draggingSessionID: String?
+        @Binding var sessionDrop: (id: String, after: Bool)?
         @State private var hovered = false
 
         var body: some View {
             let selected = !model.isFileManagerActive
                 && model.selectedPane == entry.ref
                 && model.selectedShellID == nil
+            let path = entry.pathDisplay
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Image(systemName: "terminal")
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
                     Text(entry.title)
                         .font(.system(size: 13.5))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     Spacer(minLength: 0)
+                    SidebarSessionIndexSlot(
+                        visible: showIndexHints,
+                        number: model.sessionSwitchNumber(for: .agent(entry.ref))
+                    ) {
+                        EmptyView()
+                    }
                 }
                 HStack(spacing: 5) {
-                    Image(systemName: "folder")
-                        .font(.system(size: 9.5))
+                    Image(systemName: "terminal")
+                        .font(.system(size: 11))
                         .foregroundStyle(Theme.textTertiary)
-                    Text(model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID))
-                        .font(.system(size: 11.5))
+                    if let path {
+                        Text(path)
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                    } else {
+                        ProjectSpaceIcon(
+                            path: model.spaceIconPath(device: entry.device, workspaceID: entry.pane.workspaceID),
+                            size: 11,
+                            slot: 11
+                        )
                         .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
+                        Text(model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID))
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                    }
                     Spacer(minLength: 0)
                     if model.showsRowDeviceBadges {
                         DeviceChip(device: entry.device)
@@ -323,9 +342,9 @@ struct SidebarView: View {
             )
             .onHover { hovered = $0 }
             .sidebarDragChrome(
-                isDragging: draggingTerminalID == entry.id,
-                dropAfter: terminalDrop?.after,
-                isTarget: terminalDrop?.id == entry.id
+                isDragging: draggingSessionID == entry.id,
+                dropAfter: sessionDrop?.after,
+                isTarget: sessionDrop?.id == entry.id
             )
             .overlay {
                 TerminalRowDragHost(
@@ -333,28 +352,29 @@ struct SidebarView: View {
                     onClick: { model.selectAgent(entry.ref) },
                     onRename: { model.terminalToRename = entry },
                     onClose: { model.requestClosePane(entry.ref, name: entry.title) },
-                    onDragStart: { draggingTerminalID = $0 },
+                    onDragStart: { draggingSessionID = $0 },
                     onDragEnd: {
-                        draggingTerminalID = nil
-                        terminalDrop = nil
+                        draggingSessionID = nil
+                        sessionDrop = nil
                     },
                     onDropHover: { after in
-                        terminalDrop = sidebarDropTarget(
-                            onto: entry.id, after: after, items: model.visibleTerminals
+                        sessionDrop = sidebarDropTarget(
+                            onto: entry.id, after: after, items: model.visibleSessions
                         )
                     },
                     onHoverExit: {
-                        if terminalDrop?.id == entry.id { terminalDrop = nil }
+                        if sessionDrop?.id == entry.id { sessionDrop = nil }
                     },
                     onDrop: { sourceID, after in
-                        draggingTerminalID = nil
-                        terminalDrop = nil
-                        guard let source = model.visibleTerminals.first(where: { $0.id == sourceID })
+                        draggingSessionID = nil
+                        sessionDrop = nil
+                        guard let source = model.visibleSessions.first(where: { $0.id == sourceID })
                         else { return }
-                        model.moveTerminal(source, onto: entry, placeAfter: after)
+                        model.moveSession(source, onto: .terminal(entry), placeAfter: after)
                     }
                 )
             }
+            .help(path ?? entry.title)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { model.selectAgent(entry.ref) }
             .accessibilityLabel(entry.title)
@@ -380,6 +400,12 @@ struct SidebarView: View {
                 Text(session.device.name)
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textGhost)
+                SidebarSessionIndexSlot(
+                    visible: sessionIndexHints.isShowing,
+                    number: model.sessionSwitchNumber(for: .shell(session.id))
+                ) {
+                    EmptyView()
+                }
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
@@ -392,8 +418,9 @@ struct SidebarView: View {
     private struct AgentRowView: View {
     let entry: AppModel.AgentEntry
     @ObservedObject var model: AppModel
-    @Binding var draggingAgentID: String?
-    @Binding var agentDrop: (id: String, after: Bool)?
+    var showIndexHints = false
+    @Binding var draggingSessionID: String?
+    @Binding var sessionDrop: (id: String, after: Bool)?
     @State private var hovered = false
 
     var body: some View {
@@ -409,16 +436,24 @@ struct SidebarView: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
-                AgentStatusGlyph(status: agent.status, unreadDone: unread)
+                SidebarSessionIndexSlot(
+                    visible: showIndexHints,
+                    number: model.sessionSwitchNumber(for: .agent(entry.ref))
+                ) {
+                    AgentStatusGlyph(status: agent.status, unreadDone: unread)
+                }
             }
             HStack(spacing: 5) {
                 AgentKindBadge(kind: agent.agent)
                 Text("·")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textGhost)
-                Image(systemName: "folder")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(Theme.textTertiary)
+                ProjectSpaceIcon(
+                    path: model.spaceIconPath(device: entry.device, workspaceID: agent.workspaceID),
+                    size: 11,
+                    slot: 11
+                )
+                .foregroundStyle(Theme.textTertiary)
                 Text(model.spaceName(deviceID: entry.device.id, workspaceID: agent.workspaceID))
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textTertiary)
@@ -444,9 +479,9 @@ struct SidebarView: View {
         )
         .onHover { hovered = $0 }
         .sidebarDragChrome(
-            isDragging: draggingAgentID == entry.id,
-            dropAfter: agentDrop?.after,
-            isTarget: agentDrop?.id == entry.id
+            isDragging: draggingSessionID == entry.id,
+            dropAfter: sessionDrop?.after,
+            isTarget: sessionDrop?.id == entry.id
         )
         .overlay {
             AgentRowDragHost(
@@ -454,25 +489,25 @@ struct SidebarView: View {
                 onClick: { model.selectAgent(entry.ref) },
                 onRename: { model.agentToRename = entry },
                 onClose: { model.requestClosePane(entry.ref, name: entry.title) },
-                onDragStart: { draggingAgentID = $0 },
+                onDragStart: { draggingSessionID = $0 },
                 onDragEnd: {
-                    draggingAgentID = nil
-                    agentDrop = nil
+                    draggingSessionID = nil
+                    sessionDrop = nil
                 },
                     onDropHover: { after in
-                        agentDrop = sidebarDropTarget(
-                            onto: entry.id, after: after, items: model.visibleAgents
+                        sessionDrop = sidebarDropTarget(
+                            onto: entry.id, after: after, items: model.visibleSessions
                         )
                     },
                 onHoverExit: {
-                    if agentDrop?.id == entry.id { agentDrop = nil }
+                    if sessionDrop?.id == entry.id { sessionDrop = nil }
                 },
                 onDrop: { sourceID, after in
-                    draggingAgentID = nil
-                    agentDrop = nil
-                    guard let source = model.visibleAgents.first(where: { $0.id == sourceID })
+                    draggingSessionID = nil
+                    sessionDrop = nil
+                    guard let source = model.visibleSessions.first(where: { $0.id == sourceID })
                     else { return }
-                    model.moveAgent(source, onto: entry, placeAfter: after)
+                    model.moveSession(source, onto: .agent(entry), placeAfter: after)
                 }
             )
         }

@@ -713,9 +713,7 @@ struct DetailView: View {
         case .connecting: return String(localized: "Connecting…")
         case .failed(let reason): return reason
         default:
-            if model.selectedSpace != nil
-                && model.visibleAgents.isEmpty
-                && model.visibleTerminals.isEmpty {
+            if model.selectedSpace != nil && model.visibleSessions.isEmpty {
                 return String(localized: "This space has no terminals. Click the space name to create one.")
             }
             return String(localized: "Select an agent or terminal, or start a new one")

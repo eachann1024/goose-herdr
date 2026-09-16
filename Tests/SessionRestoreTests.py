@@ -10,7 +10,7 @@ def between(start, end):
     return source[source.index(start):source.index(end, source.index(start))]
 
 pane = between("struct PaneRef:", "\nstruct SpaceRef:")
-selection = between("    @Published var selectedPane:", "\n    /// Kept-alive attaches").replace("@Published ", "")
+selection = between("    @Published var selectedPane:", "\n    /// Live attaches").replace("@Published ", "")
 register = between("    private func noteSelectedAttachSession()", "\n    /// Finished agents")
 initializer = between("    init() {", "\n    // MARK: - Derived state")
 refresh = between("            if let selected = selectedPane, selected.deviceID == deviceID,", "\n        } catch {\n            // A snapshot is one request")
@@ -45,6 +45,7 @@ class Model {
     var firstVisiblePaneRef: PaneRef?
     var visibleAgents: [Entry] { available.map { Entry(ref: $0) } }
     var visibleTerminals: [Entry] { [] }
+    var visibleSessions: [Entry] { visibleAgents + visibleTerminals }
     var selectedAttachedEntry: Entry? {
         selectedPane.flatMap { available.contains($0) ? Entry(ref: $0) : nil }
     }
@@ -55,7 +56,7 @@ class Model {
     func afterDiscovery() {
 ''' + validation + r'''
     func refresh(_ deviceID: UUID, panes: [String], focused: String?) -> Bool {
-        let previousPaneOrder = visibleAgents.map(\.ref)
+        let previousPaneOrder = visibleSessions.map(\.ref)
         let paneIDs = Set(panes)
         available = available.filter { $0.deviceID != deviceID }
         available.formUnion(panes.map { PaneRef(deviceID: deviceID, paneID: $0) })

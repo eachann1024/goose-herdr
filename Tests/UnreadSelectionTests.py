@@ -6,7 +6,7 @@ import tempfile
 
 source = (Path(__file__).resolve().parents[1] / "Sources/GooseAgent/AppModel.swift").read_text()
 start = source.index("    @Published var selectedPane:")
-selection = source[start:source.index("    /// Kept-alive attaches", start)]
+selection = source[start:source.index("    /// Live attaches", start)]
 selection = selection.replace("@Published ", "").replace("UserDefaults.standard", "defaults")
 pane = source[source.index("struct PaneRef:"):source.index("\nstruct SpaceRef:")]
 harness = r'''

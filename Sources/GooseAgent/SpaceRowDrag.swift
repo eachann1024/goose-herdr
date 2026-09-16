@@ -104,7 +104,7 @@ struct AgentRowDragHost: View {
     var body: some View {
         SidebarRowDragHost(
             entryID: entryID,
-            pasteboardType: SidebarRowDragNSView.agentPasteboardType,
+            pasteboardType: SidebarRowDragNSView.sessionPasteboardType,
             menuItems: [
                 .item(title: String(localized: "Rename Agent…"), action: onRename),
                 .separator,
@@ -135,7 +135,7 @@ struct TerminalRowDragHost: View {
     var body: some View {
         SidebarRowDragHost(
             entryID: entryID,
-            pasteboardType: SidebarRowDragNSView.terminalPasteboardType,
+            pasteboardType: SidebarRowDragNSView.sessionPasteboardType,
             menuItems: [
                 .item(title: String(localized: "Rename Terminal…"), action: onRename),
                 .separator,
@@ -154,8 +154,7 @@ struct TerminalRowDragHost: View {
 
 final class SidebarRowDragNSView: NSView, NSDraggingSource {
     static let spacePasteboardType = NSPasteboard.PasteboardType("dev.eachann.goose-herdr.space-id")
-    static let agentPasteboardType = NSPasteboard.PasteboardType("dev.eachann.goose-herdr.agent-id")
-    static let terminalPasteboardType = NSPasteboard.PasteboardType("dev.eachann.goose-herdr.terminal-id")
+    static let sessionPasteboardType = NSPasteboard.PasteboardType("dev.eachann.goose-herdr.session-id")
 
     var pasteboardType = SidebarRowDragNSView.spacePasteboardType
     var entryID = ""
