@@ -3795,6 +3795,22 @@
           }
         }
       }
+    },
+    "Resize Split": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resize Split"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整分屏大小"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

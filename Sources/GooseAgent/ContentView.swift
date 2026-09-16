@@ -53,7 +53,7 @@ struct RootView: View {
                 .hidden()
         )
         .focusedSceneValue(\.appModel, model)
-        .focusedSceneValue(\.splitAxis, model.shellSplitAxis)
+        .focusedSceneValue(\.terminalSplitTree, model.currentSplitTree)
         .sheet(isPresented: $model.showSearch) { SearchSheet(model: model) }
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 980, minHeight: 620)
@@ -317,26 +317,6 @@ struct DetailView: View {
                 .zIndex(1)
             Rectangle().fill(Theme.hairline).frame(height: 1)
             detailContent
-                // Losing the selected agent tears the SplitContainer down without
-                // resetting the axis, which would leave the same phantom split.
-                //
-                // Load-bearing beyond that: this is the ONLY thing that clears the axis
-                // when the agent goes away. `dismantleNSView` nils the coordinator's
-                // onExit before killing the shell, so the shell's own onExit never fires
-                // on teardown. Remove this and "split open with no agent selected"
-                // becomes reachable, which is a state a deferred focus request can be
-                // armed into with nothing left in the tree to consume it.
-                .onChange(of: model.selectedAttachedEntry?.id) { _, id in
-                    if id == nil {
-                        model.shellSplitAxis = nil
-                        // The placeholder tore every kept-alive attach down along with
-                        // the SplitContainer. Empty the session list and per-entry state
-                        // so a later selection doesn't resurrect them all at once.
-                        model.attachSessions = []
-                        endedAttach = [:]
-                        attachRetry = [:]
-                    }
-                }
                 .onChange(of: model.isFileManagerActive) { _, active in
                     if active { hasOpenedFileManager = true }
                 }
@@ -381,7 +361,7 @@ struct DetailView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.text)
                     Spacer()
-                } else if let shell = model.selectedShell {
+                } else if let shell = model.terminalHeaderShell {
                     Image(systemName: "terminal")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
@@ -496,163 +476,128 @@ struct DetailView: View {
     @AppStorage("terminal.mouseReporting") private var terminalMouseReporting = true
     @Environment(\.colorScheme) private var colorScheme
     /// Per-entry attach state, keyed by `AttachedEntry.id`. `endedAttach` holds the exit
-    /// code of a dead attach (nil code = no status, e.g. killed by a signal); a present
-    /// key drives that entry's reconnect overlay. `attachRetry` is a generation the
-    /// Reconnect button bumps to rebuild just that one terminal. Per-entry so one dead
-    /// terminal's overlay never covers another and Reconnect rebuilds only its own.
+    /// code of a dead attach that *survived* refresh (nil code = no status, e.g. killed
+    /// by a signal); a present key drives that entry's reconnect overlay. Ctrl+D / a
+    /// normal shell exit closes the pane, so refresh drops the attach and this stays
+    /// empty — otherwise the overlay would flash on the way out. `attachRetry` is a
+    /// generation the Reconnect button bumps to rebuild just that one terminal.
+    /// Per-entry so one dead terminal's overlay never covers another and Reconnect
+    /// rebuilds only its own.
     @State private var endedAttach: [String: Int32?] = [:]
     @State private var attachRetry: [String: Int] = [:]
     @State private var uploadingAttachment = false
-    @State private var splitTracker = SplitFocusTracker()
 
     @ViewBuilder
     private var terminal: some View {
         ZStack {
-            attachedTerminal
-            // Standalone shells stay in the hierarchy while deselected: unlike a
-            // herdr pane, an app-owned shell has no server side to reattach to,
-            // so tearing the view down would kill whatever is running in it.
-            ForEach(model.shellSessions) { session in
-                ShellTerminalView(
-                    sessionID: session.id,
-                    device: session.device,
-                    fontName: terminalFontName,
-                    fontSize: terminalFontSize,
-                    thinStrokes: terminalThinStrokes,
-                    fontWeight: terminalFontWeight,
-                    lineSpacing: terminalLineSpacing,
-                    dark: colorScheme == .dark,
-                    mouseReporting: terminalMouseReporting,
-                    onExit: { _ in model.closeShellSession(session.id) }
-                )
-                    .id("shell-\(session.id)")
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    // Solid backdrop inside the opacity compositing group so
-                    // glyph AA on Ghostty's non-opaque Metal layer stays crisp
-                    // (see attachChild) instead of rendering pale.
-                    .background(Theme.terminalBackground)
-                    .opacity(model.selectedShellID == session.id ? 1 : 0)
-                    .allowsHitTesting(model.selectedShellID == session.id)
+            TerminalSplitLayout(trees: model.splitTrees) {
+                ForEach(model.attachSessions) { session in
+                    if model.terminalLeafIsAlive(session.id, group: session.id) {
+                        attachChild(session, isSelected: model.terminalGroupID == session.id)
+                            .layoutValue(key: TerminalLeafLayoutKey.self, value: session.id)
+                            .opacity(leafOpacity(session.id, group: session.id))
+                    }
+                }
+                ForEach(model.shellSessions) { session in
+                    if model.terminalLeafIsAlive(session.id.uuidString, group: session.id.uuidString) {
+                        shellChild(id: session.id, group: session.id.uuidString, device: session.device, cwd: nil,
+                                   onExit: {
+                            if model.splitTrees[session.id.uuidString] != nil {
+                                model.closeTerminalLeaf(session.id.uuidString, group: session.id.uuidString)
+                            } else { model.closeShellSession(session.id) }
+                        })
+                    }
+                }
+                ForEach(model.splitShells) { shell in
+                    shellChild(id: shell.id, group: shell.group, device: .local, cwd: shell.workingDirectory,
+                               onExit: { model.closeTerminalLeaf(shell.id.uuidString, group: shell.group) })
+                }
             }
+            TerminalPaneHandles(model: model)
+            TerminalSplitDividers(tree: model.layoutSplitTree, onRatio: model.setSplitRatio)
+            if model.terminalGroupID == nil { terminalPlaceholder }
         }
         .background(Theme.terminalBackground)
+        .overlay(alignment: .bottomTrailing) {
+            if uploadingAttachment { uploadIndicator }
+        }
+        .onChange(of: model.terminalGroupID) { _, _ in
+            uploadingAttachment = false
+            model.restoreTerminalFocus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+            guard let window = note.object as? NSWindow else { return }
+            let target = model.splitAgentView?.window
+            var shouldRestore = false
+            if model.pendingCreatedSessionFocus, window === target {
+                shouldRestore = true
+            }
+            if model.pendingSplitAgentFocus {
+                model.pendingSplitAgentFocus = false
+                if window === target { shouldRestore = true }
+            }
+            if shouldRestore { model.restoreTerminalFocus() }
+        }
     }
 
-    @ViewBuilder
-    private var attachedTerminal: some View {
-        if let entry = model.selectedAttachedEntry {
-            SplitContainer(
-                axis: model.shellSplitAxis,
-                activeSide: model.activeSplitSide,
-                ratio: $model.splitRatio
-            ) {
-                // One structural position holding every kept-alive attach. Each child
-                // keeps a stable identity and is toggled by opacity, so switching the
-                // selection — or opening/closing the split — never tears a terminal
-                // down: its content survives the round trip. Do not key this on the
-                // selection; that rebuild-on-switch is exactly what this removes.
-                ZStack {
-                    ForEach(model.attachSessions) { session in
-                        attachChild(session, isSelected: session.id == entry.id)
-                    }
-                }
-            } second: {
-                ShellTerminalView(
-                    fontName: terminalFontName,
-                    fontSize: terminalFontSize,
-                    thinStrokes: terminalThinStrokes,
-                    fontWeight: terminalFontWeight,
-                    lineSpacing: terminalLineSpacing,
-                    dark: colorScheme == .dark,
-                    mouseReporting: terminalMouseReporting,
-                    onExit: { _ in model.shellSplitAxis = nil },
-                    onViewReady: {
-                        splitTracker.shellView = $0
-                        model.splitShellView = $0
-                    }
-                )
-                    // Deliberately not keyed on colorScheme like the attach above:
-                    // a new id tears the view down and kills the shell with whatever
-                    // was running in it, and unlike a herdr pane a local shell has no
-                    // server-side state to reattach to. updateNSView re-themes it.
-                    .id("shell")
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+    private func paneHandleInset(group: String) -> CGFloat {
+        (model.splitTrees[group]?.leaves.count ?? 1) > 1 ? TerminalPaneHandleMetrics.height : 0
+    }
+
+    private func leafOpacity(_ id: String, group: String) -> Double {
+        guard model.terminalGroupID == group else { return 0 }
+        return model.currentSplitTree?.focusedID == id ? 1 : 0.55
+    }
+
+    private func shellChild(id: UUID, group: String, device: Device, cwd: String?, onExit: @escaping () -> Void) -> some View {
+        ShellTerminalView(
+            sessionID: id, device: device, workingDirectory: cwd,
+            fontName: terminalFontName, fontSize: terminalFontSize,
+            thinStrokes: terminalThinStrokes, fontWeight: terminalFontWeight,
+            lineSpacing: terminalLineSpacing, dark: colorScheme == .dark,
+            mouseReporting: terminalMouseReporting, onExit: { _ in onExit() },
+            onFocus: { model.focusTerminalLeaf(id.uuidString, group: group) }
+        )
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .padding(.top, paneHandleInset(group: group))
+        .background(Theme.terminalBackground)
+        .opacity(leafOpacity(id.uuidString, group: group))
+        .allowsHitTesting(model.terminalGroupID == group)
+        .accessibilityHidden(model.terminalGroupID != group)
+        .layoutValue(key: TerminalLeafLayoutKey.self, value: id.uuidString)
+    }
+
+    private var terminalPlaceholder: some View {
+        VStack(spacing: 16) {
+            if let url = Bundle.main.url(forResource: "EmptyState", withExtension: "png"),
+               let image = NSImage(contentsOf: url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.terminalBackground)
-            .overlay(alignment: .bottomTrailing) {
-                if uploadingAttachment { uploadIndicator }
+            Text(placeholderText)
+                .font(.system(size: 13))
+                .foregroundStyle(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+            Button("New Terminal") {
+                model.quickNewTerminal()
             }
-            .onAppear {
-                // Single source of truth: the tracker writes straight into the model
-                // instead of holding its own copy for a second onChange to mirror.
-                splitTracker.onSideChanged = { model.activeSplitSide = $0 }
-                splitTracker.isAgentView = { view in
-                    AttachViewRegistry.liveViews.contains { $0 === view }
-                }
-                splitTracker.start()
-            }
-            .onChange(of: entry.id) { _, newID in
-                uploadingAttachment = false
-                // A re-selected kept-alive view does not self-focus (makeNSView ran once
-                // at creation), so hand it the keyboard explicitly — matching how every
-                // selection used to focus the freshly built terminal.
-                AttachViewRegistry.focus(newID)
-            }
-            // Keyed on the window becoming key rather than on a delay: that is the event
-            // that follows the sheet's responder restore. Filtered to the terminal's own
-            // window and consumed no matter which window it was, so a pending request can
-            // never survive to a later, unrelated activation — coming back from ⌘Tab or
-            // closing Settings would otherwise yank the keyboard into a live pane.
-            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-                guard model.pendingSplitAgentFocus else { return }
-                model.pendingSplitAgentFocus = false
-                guard let window = note.object as? NSWindow,
-                      window === model.splitAgentView?.window
-                else { return }
-                focusTerminal(model.splitAgentView)
-            }
-            // Splitting moves the keyboard to the shell, so closing the split has to
-            // hand it back — by ⌘W or by the shell exiting on its own. Reset the
-            // tracked side to the agent so the next split starts predictably.
-            .onChange(of: model.shellSplitAxis) { _, axis in
-                if axis == nil {
-                    model.activeSplitSide = .agent
-                    model.pendingSplitAgentFocus = false
-                    focusRemainingTerminal(preferring: model.splitAgentView)
-                }
-            }
-        } else {
-            // The .onReceive below only exists on the branch above, so a request armed
-            // while no pane is selected would have no consumer and would be cashed in by
-            // some later activation. Revealing a pane that has since gone away lands here.
-            VStack(spacing: 10) {
-                Image(systemName: "terminal")
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(Theme.textGhost)
-                Text(placeholderText)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textTertiary)
-                Button("New Terminal") {
-                    model.quickNewTerminal()
+            .controlSize(.large)
+            .focusEffectDisabled()
+            if model.hasReconnectableDevice {
+                Button("Reconnect") {
+                    model.reconnectFailedDevices()
                 }
                 .controlSize(.small)
                 .focusEffectDisabled()
-                if model.hasReconnectableDevice {
-                    Button("Reconnect") {
-                        model.reconnectFailedDevices()
-                    }
-                    .controlSize(.small)
-                    .focusEffectDisabled()
-                }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.terminalBackground)
-            .onAppear { model.pendingSplitAgentFocus = false }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.terminalBackground)
     }
+
 
     /// One kept-alive attach. Stays in the hierarchy while deselected (opacity 0, no hit
     /// testing) so its content survives; the selected one is visible and interactive.
@@ -690,6 +635,7 @@ struct DetailView: View {
                 .id("attach-\(session.id)-\(attachRetry[session.id] ?? 0)")
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
+                .padding(.top, paneHandleInset(group: session.id))
             if isSelected, endedAttach[session.id] != nil,
                !model.closingPanes.contains(session.ref) {
                 attachEndedOverlay(session)

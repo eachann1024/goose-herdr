@@ -332,6 +332,13 @@ private enum ClipboardFileError: LocalizedError {
 /// text in the grid; the only hook needed here is keeping ⌘/⌃ chords off the
 /// PTY while `hasMarkedText()`.
 final class LineBreakTerminalView: AppTerminalView {
+    var onFocus: (() -> Void)?
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { onFocus?() }
+        return accepted
+    }
+
     /// When false, mouse button events always stay local even if the TUI
     /// requested mouse reporting (Shift bypasses it either way).
     var mouseReportingEnabled = true
@@ -825,47 +832,6 @@ private extension NSEvent {
     }
 }
 
-/// Puts the keyboard in a specific terminal, one runloop pass later so it lands after
-/// AppKit has finished its own first-responder bookkeeping for the current event.
-func focusTerminal(_ view: LineBreakTerminalView?) {
-    DispatchQueue.main.async {
-        guard let view, let window = view.window else { return }
-        window.makeFirstResponder(view)
-    }
-}
-
-/// Hands the keyboard back to whichever terminal is left after a split closes. The
-/// shell view that held first responder is gone by then, and AppKit falls back to the
-/// window itself, which reads as a dead keyboard until the user clicks.
-///
-/// `preferred` is the selected agent's attach view. It matters now that kept-alive
-/// attaches stay in the hierarchy while hidden: a blind depth-first search could land
-/// on an invisible terminal and strand the keyboard there, so the visible selected one
-/// is focused instead.
-func focusRemainingTerminal(preferring preferred: LineBreakTerminalView? = nil) {
-    DispatchQueue.main.async {
-        guard let window = NSApp.keyWindow else { return }
-        // Only fill a focus vacuum. If the shell died on its own while the user was
-        // typing in the sidebar filter or in Search, that field is still first
-        // responder and yanking the keyboard into a live agent session is worse than
-        // doing nothing.
-        guard window.firstResponder === window else { return }
-        guard let terminal = preferred ?? window.contentView?.firstTerminalDescendant()
-        else { return }
-        window.makeFirstResponder(terminal)
-    }
-}
-
-private extension NSView {
-    func firstTerminalDescendant() -> LineBreakTerminalView? {
-        if let terminal = self as? LineBreakTerminalView { return terminal }
-        for subview in subviews {
-            if let found = subview.firstTerminalDescendant() { return found }
-        }
-        return nil
-    }
-}
-
 /// Embeds a Ghostty terminal running a direct agent or ordinary-terminal attach
 /// (locally or over SSH).
 struct AttachTerminalView: NSViewRepresentable {
@@ -897,9 +863,7 @@ struct AttachTerminalView: NSViewRepresentable {
     /// dead session otherwise keeps its last frame and silently eats every
     /// keystroke, which reads as a freeze.
     var onExit: ((Int32?) -> Void)? = nil
-    /// Delivers the created view so a focus tracker can observe its window's
-    /// first responder without retaining the terminal itself.
-    var onViewReady: ((LineBreakTerminalView) -> Void)? = nil
+    var onFocus: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -907,6 +871,7 @@ struct AttachTerminalView: NSViewRepresentable {
         let host = TerminalProcessHost()
         let view = LineBreakTerminalView(frame: .zero)
         view.processHost = host
+        view.onFocus = onFocus
         configurePasteHandling(view)
         context.coordinator.view = view
         context.coordinator.host = host
@@ -929,20 +894,17 @@ struct AttachTerminalView: NSViewRepresentable {
         if let sessionID {
             AttachViewRegistry.register(view, for: sessionID)
         }
-        // SwiftUI throws this view away and builds a new one whenever the selected
-        // agent changes (the `.id("attach-…")` in ContentView), and a fresh NSView is
-        // never first responder — so keystrokes went nowhere until the user clicked.
-        // The hop to the next runloop pass is required: while `makeNSView` runs the
-        // view has no `window` yet.
+        // A newly attached view needs a runloop pass to join its window before
+        // receiving focus. Selection changes retain this view instead of rebuilding it.
         DispatchQueue.main.async { [weak view] in
             guard let view, let window = view.window else { return }
             window.makeFirstResponder(view)
         }
-        onViewReady?(view)
         return view
     }
 
     func updateNSView(_ nsView: LineBreakTerminalView, context: Context) {
+        nsView.onFocus = onFocus
         configurePasteHandling(nsView)
         context.coordinator.onExit = onExit
         configureAppearance(nsView)
@@ -1041,14 +1003,7 @@ func applyTerminalAppearance(
     view.processHost?.setLightColorsEnabled(!dark)
 }
 
-/// A kept-alive agent/terminal attach, registered by its `AttachedEntry.id`. Unlike a
-/// standalone shell, an attached pane's view stays in the hierarchy (hidden) when
-/// deselected so its content survives a switch away and back; the registry lets focus
-/// commands and the split focus tracker resolve the currently selected entry's view.
-///
-/// Lock-guarded rather than actor-isolated: register/unregister run on the main thread
-/// (make/dismantleNSView), but `liveViews` is also read from `SplitFocusTracker`'s KVO
-/// callbacks, which are nonisolated even though AppKit delivers them on the main thread.
+/// Weak lookup of retained attach views by their stable `AttachedEntry.id`.
 enum AttachViewRegistry {
     private struct WeakView { weak var view: LineBreakTerminalView? }
     private static let lock = NSLock()
@@ -1070,14 +1025,6 @@ enum AttachViewRegistry {
         lock.lock()
         defer { lock.unlock() }
         return views[id]?.view
-    }
-
-    /// Every live attach view. Only the selected one is visible/focusable, so "the
-    /// responder is inside any of these" is equivalent to "the agent side has focus".
-    static var liveViews: [LineBreakTerminalView] {
-        lock.lock()
-        defer { lock.unlock() }
-        return views.values.compactMap { $0.view }
     }
 
     static func focus(_ id: String) {
@@ -1104,6 +1051,8 @@ enum ShellViewRegistry {
         views[id] = nil
     }
 
+    static func view(for id: UUID) -> LineBreakTerminalView? { views[id]?.view }
+
     static func focus(_ id: UUID) {
         DispatchQueue.main.async {
             guard let view = views[id]?.view, let window = view.window else { return }
@@ -1124,9 +1073,7 @@ struct ShellTerminalView: NSViewRepresentable {
     var dark: Bool = false
     var mouseReporting: Bool = true
     var onExit: ((Int32?) -> Void)? = nil
-    /// Delivers the created view so a focus tracker can observe its window's
-    /// first responder without retaining the terminal itself.
-    var onViewReady: ((LineBreakTerminalView) -> Void)? = nil
+    var onFocus: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -1134,6 +1081,7 @@ struct ShellTerminalView: NSViewRepresentable {
         let host = TerminalProcessHost()
         let view = LineBreakTerminalView(frame: .zero)
         view.processHost = host
+        view.onFocus = onFocus
         context.coordinator.view = view
         context.coordinator.host = host
         context.coordinator.onExit = onExit
@@ -1171,11 +1119,11 @@ struct ShellTerminalView: NSViewRepresentable {
             guard let view, let window = view.window else { return }
             window.makeFirstResponder(view)
         }
-        onViewReady?(view)
         return view
     }
 
     func updateNSView(_ nsView: LineBreakTerminalView, context: Context) {
+        nsView.onFocus = onFocus
         context.coordinator.onExit = onExit
         applyTerminalAppearance(
             nsView,

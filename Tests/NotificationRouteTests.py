@@ -22,7 +22,7 @@ final class Model {
     var selectedSpace: SpaceRef?
     var selectedPane: PaneRef?
     var selectedShellID: UUID? = UUID()
-    var shellSplitAxis: Int? = 1
+    var hasTerminalSplits = true
     var showSearch = false
     var pendingSplitAgentFocus = false
     var states: [UUID: State] = [:]

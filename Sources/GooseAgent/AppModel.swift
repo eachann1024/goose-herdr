@@ -190,10 +190,17 @@ final class AppModel: ObservableObject {
     }
     private static let selectedPaneKey = "session.selectedPane"
 
-    /// Kept-alive attaches: every agent/terminal the user has opened stays
-    /// mounted (hidden) so switching back preserves its scrollback and running
-    /// state instead of re-attaching. Evicted when its pane closes.
-    @Published var attachSessions: [AttachedEntry] = []
+    /// Live attaches stay mounted across selection/space changes. Confirmed pane
+    /// or device removal releases their views and owned split siblings.
+    @Published var attachSessions: [AttachedEntry] = [] {
+        didSet {
+            let live = Set(attachSessions.map(\.id))
+            for entry in oldValue where !live.contains(entry.id) { discardSplitGroup(entry.id) }
+        }
+    }
+
+    /// Last selected pane in each space; returning also reveals its retained splits.
+    private var lastPaneBySpace: [SpaceRef: PaneRef] = [:]
 
     /// Keeps the selected pane's attach alive so switching back preserves its content.
     /// Runs synchronously inside the `selectedPane` assignment, so the kept-alive entry
@@ -212,31 +219,223 @@ final class AppModel: ObservableObject {
     @Published var showNewSpace = false
     @Published var showSearch = false
     @Published var isFileManagerActive = false
-    @Published var shellSplitAxis: SplitAxis?
-    /// Set by `reveal` when a jump lands while the ⌘D split is open, and consumed once the
-    /// main window is key again. Only an actual jump sets it: dismissing the search with
-    /// Escape never calls `reveal`, and the sidebar assigns `selectedPane` directly.
-    @Published var pendingSplitAgentFocus = false
-    /// The pane that currently holds the keyboard within the ⌘D split. Reset to
-    /// the agent side whenever the split closes so reopening it is predictable.
-    @Published var activeSplitSide: SplitSide = .agent
-    /// Persisted divider ratio for the ⌘D split, shared with the resize commands.
-    /// Deliberately not `@AppStorage`: that publishes only from inside a View, so the
-    /// menu commands would write UserDefaults without ever redrawing the split.
-    @Published var splitRatio: Double =
-        UserDefaults.standard.object(forKey: AppModel.splitRatioKey) as? Double ?? 0.5
-    {
-        didSet { UserDefaults.standard.set(splitRatio, forKey: AppModel.splitRatioKey) }
+    private var closingSplitWorkspaces: Set<SpaceRef> = []
+    @Published var splitTrees: [String: TerminalSplitTree] = [:]
+    struct SplitShell: Identifiable {
+        let id: UUID
+        var group: String
+        let workingDirectory: String?
     }
-    static let splitRatioKey = "terminal.splitRatio"
-    /// Live terminal views of the ⌘D split, used by menu commands to move focus.
-    /// The agent side is resolved from the attach registry by the current selection
-    /// (kept-alive attach views persist across switches, so a stored ref would go
-    /// stale); the shell side stays a weak ref since the split shell is a single view.
+    @Published var splitShells: [SplitShell] = []
+    @Published var pendingSplitAgentFocus = false
+    @Published var pendingCreatedSessionFocus = false
     var splitAgentView: LineBreakTerminalView? {
         selectedAttachedEntry.flatMap { AttachViewRegistry.view(for: $0.id) }
     }
-    weak var splitShellView: LineBreakTerminalView?
+
+    var terminalGroupID: String? {
+        selectedShell?.id.uuidString ?? selectedAttachedEntry?.id
+    }
+    var layoutSplitTree: TerminalSplitTree? {
+        guard let id = terminalGroupID else { return nil }
+        return splitTrees[id] ?? TerminalSplitTree(id)
+    }
+    var currentSplitTree: TerminalSplitTree? { isFileManagerActive ? nil : layoutSplitTree }
+
+    /// The sidebar owns the group; the titlebar describes the focused shell.
+    var terminalHeaderShell: ShellSession? {
+        if let tree = layoutSplitTree,
+           let shell = splitShells.first(where: { $0.id.uuidString == tree.focusedID && $0.group == terminalGroupID }) {
+            return ShellSession(id: shell.id, title: selectedShell?.title ?? String(localized: "Terminal"), device: .local)
+        }
+        return selectedShell
+    }
+    var hasTerminalSplits: Bool { (currentSplitTree?.leaves.count ?? 0) > 1 }
+
+    func terminalLeafIsAlive(_ id: String, group: String) -> Bool {
+        splitTrees[group]?.leaves.contains(id) ?? (id == group)
+    }
+
+    func terminalView(_ id: String) -> LineBreakTerminalView? {
+        AttachViewRegistry.view(for: id) ?? UUID(uuidString: id).flatMap { ShellViewRegistry.view(for: $0) }
+    }
+
+    func focusTerminalLeaf(_ id: String, group: String) {
+        guard terminalLeafIsAlive(id, group: group) else { return }
+        var tree = splitTrees[group] ?? TerminalSplitTree(group)
+        guard tree.focusedID != id else { return }
+        tree.focusedID = id
+        splitTrees[group] = tree
+    }
+
+    func restoreTerminalFocus() {
+        guard let tree = currentSplitTree else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.currentSplitTree?.focusedID == tree.focusedID,
+                  let view = self.terminalView(tree.focusedID),
+                  let window = view.window else { return }
+            self.pendingCreatedSessionFocus = false
+            window.makeFirstResponder(view)
+        }
+    }
+
+    /// Menu shortcuts often finish while the new attach is still joining its window.
+    func requestCreatedSessionFocus() {
+        pendingCreatedSessionFocus = true
+        restoreTerminalFocus()
+        for delay in [0.0, 0.05, 0.15, 0.5] as [TimeInterval] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self, self.pendingCreatedSessionFocus else { return }
+                self.restoreTerminalFocus()
+            }
+        }
+    }
+
+    func focusSplit(_ direction: SplitDirection) {
+        guard let group = terminalGroupID, let id = currentSplitTree?.neighbor(direction) else { return }
+        focusTerminalLeaf(id, group: group)
+        restoreTerminalFocus()
+    }
+
+    struct TerminalPaneDrag {
+        let token = UUID().uuidString
+        let group: String
+        let source: String
+        let root: TerminalSplitTree.Node
+    }
+
+    func beginTerminalPaneDrag(_ source: String, group: String) -> TerminalPaneDrag? {
+        guard group == terminalGroupID, let tree = currentSplitTree,
+              tree.leaves.count > 1, tree.leaves.contains(source) else { return nil }
+        return TerminalPaneDrag(group: group, source: source, root: tree.root)
+    }
+
+    func canDropTerminalPane(_ drag: TerminalPaneDrag, token: String, target: String, group: String) -> Bool {
+        guard token == drag.token, group == drag.group, group == terminalGroupID,
+              let tree = currentSplitTree, tree.root == drag.root else { return false }
+        return drag.source != target && tree.leaves.contains(drag.source) && tree.leaves.contains(target)
+    }
+
+    @discardableResult
+    func dropTerminalPane(_ drag: TerminalPaneDrag, token: String, target: String, group: String) -> Bool {
+        guard canDropTerminalPane(drag, token: token, target: target, group: group) else { return false }
+        return swapTerminalLeaves(drag.source, with: target, group: group)
+    }
+
+    @discardableResult
+    func swapTerminalLeaves(_ source: String, with target: String, group: String) -> Bool {
+        guard group == terminalGroupID, var tree = currentSplitTree,
+              tree.swap(source, with: target) else { return false }
+        splitTrees[group] = tree
+        restoreTerminalFocus()
+        return true
+    }
+
+    func swapSplit(_ direction: SplitDirection) {
+        guard let group = terminalGroupID, let tree = currentSplitTree,
+              let target = tree.neighbor(direction) else { return }
+        swapTerminalLeaves(tree.focusedID, with: target, group: group)
+    }
+
+    func resizeSplit(along axis: SplitAxis, grow: Bool) {
+        guard let group = terminalGroupID, var tree = currentSplitTree else { return }
+        tree.resize(along: axis, grow: grow)
+        splitTrees[group] = tree
+    }
+
+    func equalizeSplits() {
+        guard let group = terminalGroupID, var tree = currentSplitTree else { return }
+        tree.root = tree.root.equalized
+        splitTrees[group] = tree
+    }
+
+    func setSplitRatio(_ id: UUID, to ratio: Double) {
+        guard let group = terminalGroupID, var tree = currentSplitTree else { return }
+        tree.root = tree.root.settingRatio(id, to: ratio)
+        splitTrees[group] = tree
+    }
+
+    func splitFocusedTerminal(_ axis: SplitAxis) {
+        guard let group = terminalGroupID, let tree = currentSplitTree else { return }
+        let source = tree.focusedID
+        let attach = attachSessions.first { $0.id == source }
+        let cwd: String?
+        if let attach, attach.device.isLocal {
+            // Server-reported live cwd; the event debounce/RPC means this is not
+            // a synchronous process query. Keep splitting synchronous so rapid
+            // key presses always target the newly inserted leaf.
+            let state = session(attach.device.id)
+            cwd = state.panes.first { $0.paneID == attach.ref.paneID }?.cwd
+                ?? state.agents.first { $0.paneID == attach.ref.paneID }?.cwd
+        } else {
+            let isLocal = attach == nil && (shellSessions.first { $0.id.uuidString == source }?.device.isLocal ?? true)
+            cwd = isLocal ? (terminalView(source)?.processHost?.process.currentWorkingDirectory
+                ?? splitShells.first { $0.id.uuidString == source }?.workingDirectory) : nil
+        }
+        insertSplit(axis, source: source, group: group, cwd: cwd)
+    }
+
+    private func insertSplit(_ axis: SplitAxis, source: String, group: String, cwd: String?) {
+        var tree = splitTrees[group] ?? TerminalSplitTree(group)
+        guard tree.leaves.contains(source) else { return }
+        let id = UUID()
+        splitShells.append(SplitShell(id: id, group: group, workingDirectory: cwd))
+        tree.insert(id.uuidString, beside: source, axis: axis)
+        splitTrees[group] = tree
+        restoreTerminalFocus()
+    }
+
+    func closeFocusedSplit() {
+        guard let group = terminalGroupID, let tree = currentSplitTree else { return }
+        closeTerminalLeaf(tree.focusedID, group: group)
+    }
+
+    func closeTerminalLeaf(_ id: String, group: String) {
+        guard var tree = splitTrees[group], tree.leaves.contains(id) else { return }
+        if tree.close(id) {
+            splitTrees[group] = tree
+            splitShells.removeAll { $0.id.uuidString == id }
+            if id == group, let index = shellSessions.firstIndex(where: { $0.id.uuidString == group }),
+               tree.leaves.allSatisfy({ leaf in splitShells.contains { $0.id.uuidString == leaf && $0.group == group } }) {
+                let owner = shellSessions[index]
+                shellSessions[index] = ShellSession(id: owner.id, title: owner.title, device: .local)
+            }
+        } else if shellSessions.contains(where: { $0.id.uuidString == group }) {
+            closeShellSession(UUID(uuidString: group)!)
+        } else {
+            // Last local sibling after the attach was closed: return to the
+            // server-backed attach, never close an invisible server pane.
+            splitTrees[group] = nil
+            splitShells.removeAll { $0.group == group }
+        }
+        if terminalGroupID == group { restoreTerminalFocus() }
+    }
+
+    /// A confirmed server exit removes only that leaf. Rehome surviving local
+    /// PTYs under an ordinary sidebar shell; the flat ForEach still uses leaf IDs.
+    private func preserveSplitSiblings(of entry: AttachedEntry) {
+        guard var tree = splitTrees[entry.id] else { return }
+        if tree.leaves.contains(entry.id), !tree.close(entry.id) { return }
+        guard !tree.leaves.isEmpty else { return }
+        let wasSelected = terminalGroupID == entry.id
+        let owner = UUID()
+        shellSessions.append(ShellSession(id: owner, title: entry.title, device: .local))
+        splitTrees[owner.uuidString] = tree
+        splitTrees[entry.id] = nil
+        for index in splitShells.indices where splitShells[index].group == entry.id {
+            splitShells[index].group = owner.uuidString
+        }
+        if wasSelected {
+            selectedShellID = owner
+            restoreTerminalFocus()
+        }
+    }
+
+    func discardSplitGroup(_ group: String) {
+        splitTrees[group] = nil
+        splitShells.removeAll { $0.group == group }
+    }
+
     /// Standalone terminals. Their views stay alive while deselected —
     /// unlike agents, a local shell has no server side to reattach to.
     @Published var shellSessions: [ShellSession] = []
@@ -696,7 +895,7 @@ final class AppModel: ObservableObject {
         // and a later unrelated activation would cash it in, pulling the keyboard out of
         // the shell. Those clicks get focus from the recreated attach and from the
         // entry-change request instead.
-        if shellSplitAxis != nil, showSearch { pendingSplitAgentFocus = true }
+        if hasTerminalSplits, showSearch { pendingSplitAgentFocus = true }
     }
 
     // MARK: - Shell terminals
@@ -785,6 +984,7 @@ final class AppModel: ObservableObject {
     }
 
     func closeShellSession(_ id: UUID) {
+        discardSplitGroup(id.uuidString)
         shellSessions.removeAll { $0.id == id }
         if selectedShellID == id {
             selectedShellID = shellSessions.last?.id
@@ -1217,11 +1417,19 @@ final class AppModel: ObservableObject {
             // Drop kept-alive attaches whose pane is gone (closed). A pane only taken
             // over by another client still exists, so it stays — its Reconnect overlay
             // needs the kept-alive child to rebuild the attach.
+            for entry in attachSessions where entry.device.id == deviceID && !paneIDs.contains(entry.ref.paneID) {
+                // A last server pane can take its empty workspace with it.
+                // Explicit workspace closes discard groups after the RPC instead.
+                if !closingPanes.contains(entry.ref),
+                   !closingSplitWorkspaces.contains(SpaceRef(deviceID: deviceID, workspaceID: entry.workspaceID)) {
+                    preserveSplitSiblings(of: entry)
+                }
+            }
             attachSessions.removeAll { $0.device.id == deviceID && !paneIDs.contains($0.ref.paneID) }
             if let selected = selectedPane, selected.deviceID == deviceID,
                !paneIDs.contains(selected.paneID) {
                 // Follow sidebar order, not the server's focus or agent activity priority.
-                let remaining = Set(visibleAgents.map(\.ref) + visibleTerminals.map(\.ref))
+                let remaining = Set(visibleSessions.map(\.ref))
                 if let index = previousPaneOrder.firstIndex(of: selected) {
                     let neighbors = Array(previousPaneOrder.dropFirst(index + 1))
                         + previousPaneOrder.prefix(index).reversed()
@@ -1507,6 +1715,7 @@ final class AppModel: ObservableObject {
                     ?? snapshot.panes?.first { $0.paneID == ref.paneID }?.cwd
                     ?? snapshot.agents.first { $0.paneID == ref.paneID }?.cwd
                 try await service.closePane(paneID: ref.paneID)
+                for entry in attachSessions where entry.ref == ref { discardSplitGroup(entry.id) }
                 if workspace?.paneCount == 1 {
                     rememberClosedSpace(
                         deviceID: device.id,
