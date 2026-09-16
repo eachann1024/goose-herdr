@@ -246,7 +246,7 @@ struct SettingsView: View {
             AboutSettingsView()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(minWidth: 480, idealWidth: 520, minHeight: 360)
+        .frame(width: 420)
         .herdrmHideFocusRing()
     }
 }
