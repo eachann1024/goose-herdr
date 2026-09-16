@@ -6,12 +6,13 @@ import tempfile
 
 source = (Path(__file__).resolve().parents[1] / "Sources/GooseAgent/AppModel.swift").read_text()
 start = source.index("    private func performClosePane(")
-end = source.index("\n    // MARK: - Actions", start)
+end = source.index("\n    // MARK: - Close command", start)
 method = source[start:end].replace("private func", "func", 1)
 assert "createTab(" not in method, "closing a pane must not create a replacement tab"
 harness = r'''
 import Foundation
 struct PaneRef: Hashable { let deviceID: UUID; let paneID: String }
+struct SpaceRef: Hashable { let deviceID: UUID; let workspaceID: String }
 struct Device { let id = UUID() }
 struct Pane { let paneID: String; let workspaceID: String; var cwd: String? = nil }
 struct Workspace { let workspaceID: String; let paneCount: Int?; var label: String = ""; var cwd: String? = nil }
@@ -45,10 +46,16 @@ enum Failure: Error { case close }
 @MainActor final class Model {
     let backend = Service()
     var paneCloseTask: Task<Void, Never>?
+    struct AttachEntry { let ref: PaneRef; let id: String }
+    var attachSessions: [AttachEntry] = []
+    func discardSplitGroup(_ id: String) {}
     var closingPanes: Set<PaneRef> = []
     var actionError: String?
     var retained: [(String, String?, Int)] = []
     var states: [UUID: DeviceState] = [:]
+    var selectedPane: PaneRef?
+    var selectedShellID: UUID?
+    var selectedSpace: SpaceRef?
     func service(for device: Device) -> Service { backend }
     func refresh(_ id: UUID) async {
         assert(closingPanes.count == 1, "suppress reconnect until the close refresh finishes")
@@ -87,6 +94,7 @@ enum Failure: Error { case close }
         assert(model.retained.map(\.0) == ["space"])
         assert(model.retained[0].1 == "Space")
         assert(model.retained[0].2 == 1, "closing the last pane preserves the sidebar slot")
+        assert(model.selectedSpace?.workspaceID == "space", "last pane leaves the empty space selected")
 
         // Two live panes: each close uses the remaining count. Only the last is retained.
         model.backend.spaceExists = true

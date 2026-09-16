@@ -27,20 +27,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         return .terminateLater
     }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !model.hasKeepAliveWork
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            sender.windows.first { $0.canBecomeMain }?.makeKeyAndOrderFront(nil)
+        }
+        return true
+    }
 }
 
 private struct AppModelFocusedValueKey: FocusedValueKey {
     typealias Value = AppModel
 }
 
-/// The split axis travels as its own focused value, not read off the model. `Commands`
-/// gets the AppModel by reference and never subscribes to its objectWillChange, so
-/// `focusedModel?.shellSplitAxis` was evaluated once and stuck: the menu items stayed
-/// disabled with a split open, and a disabled NSMenuItem does not fire its key
-/// equivalent. A value type changes identity, which does invalidate the commands body —
-/// that is also what lets the shortcuts follow the current axis.
-private struct SplitAxisFocusedValueKey: FocusedValueKey {
-    typealias Value = SplitAxis
+/// Commands do not observe AppModel changes through its reference. Publish a
+/// value separately so split menu availability follows the displayed group.
+private struct TerminalSplitTreeFocusedValueKey: FocusedValueKey {
+    typealias Value = TerminalSplitTree
 }
 
 extension FocusedValues {
@@ -264,26 +271,28 @@ struct GooseAgentApp: App {
         }
     }
 
+    private var closeTargetModel: AppModel {
+        focusedModel ?? appDelegate.model
+    }
+
     private var closeButtonTitle: String {
         if isSecondaryKeyWindow { return String(localized: "Close") }
-        if focusedModel?.shellSplitAxis != nil { return String(localized: "Close Split") }
-        if focusedModel?.selectedShell != nil { return String(localized: "Close Terminal") }
-        if focusedModel?.isFileManagerActive == true { return String(localized: "Close Files") }
-        if let attached = focusedModel?.selectedAttachedEntry {
+        let model = closeTargetModel
+        if model.closeCommandAction() == .closeSplit { return String(localized: "Close Split") }
+        if model.selectedShell != nil { return String(localized: "Close Terminal") }
+        if model.isFileManagerActive { return String(localized: "Close Files") }
+        if let attached = model.selectedAttachedEntry {
             return attached.isAgent
                 ? String(localized: "Close Agent")
                 : String(localized: "Close Terminal")
         }
+        if model.selectedSpace != nil { return String(localized: "Close Space") }
         return String(localized: "Close")
     }
 
     /// Settings / panels that aren't the main console — ⌘W should just dismiss them.
     private var isSecondaryKeyWindow: Bool {
-        guard let window = NSApp.keyWindow else { return false }
-        // Settings scene windows use the standard style mask without the main
-        // console's hidden-title-bar chrome; also treat non-main as secondary.
-        if window === NSApp.mainWindow { return false }
-        return true
+        CloseCommandRouting.shouldDismissKeyWindow(NSApp.keyWindow, main: NSApp.mainWindow)
     }
 
     private func performCloseCommand() {
@@ -291,27 +300,9 @@ struct GooseAgentApp: App {
             NSApp.keyWindow?.performClose(nil)
             return
         }
-        guard let model = focusedModel else {
+        if closeTargetModel.performCloseCommand() == .closeWindow {
             NSApp.keyWindow?.performClose(nil)
-            return
         }
-        if model.shellSplitAxis != nil {
-            model.shellSplitAxis = nil
-            return
-        }
-        if let shell = model.selectedShell {
-            model.closeShellSession(shell.id)
-            return
-        }
-        if model.isFileManagerActive {
-            model.isFileManagerActive = false
-            return
-        }
-        if let entry = model.selectedAttachedEntry {
-            model.requestClosePane(entry.ref, name: entry.title)
-            return
-        }
-        NSApp.keyWindow?.performClose(nil)
     }
 
     static func applyTheme(_ preference: String) {
@@ -349,8 +340,7 @@ private struct OpenSettingsWindowButton: View {
             openWindow(id: "settings")
             // Bring to front if already open.
             DispatchQueue.main.async {
-                for window in NSApp.windows where window.identifier?.rawValue == "settings"
-                    || window.title == String(localized: "Settings") {
+                for window in NSApp.windows where CloseCommandRouting.isSettingsWindow(window) {
                     window.makeKeyAndOrderFront(nil)
                 }
             }

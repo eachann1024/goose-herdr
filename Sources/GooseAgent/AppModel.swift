@@ -1792,8 +1792,98 @@ final class AppModel: ObservableObject {
                     )
                 }
                 await refresh(device.id)
+                // Last tab in this space: stay on the empty placeholder so the
+                // next ⌘W can close the space instead of jumping away or quitting.
+                if selectedPane == nil, selectedShellID == nil, selectedSpace == nil {
+                    selectedSpace = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
+                }
             } catch {
                 actionError = actionErrorMessage(error, device: device)
+            }
+        }
+    }
+
+    // MARK: - Close command
+
+    enum CloseCommandAction: Equatable {
+        case closeSplit
+        case closeShell
+        case leaveFiles
+        case closePane
+        case closeSpace
+        case keepWindow
+        case closeWindow
+    }
+
+    /// ⌘W peels the onion: split → standalone terminal → Files → pane →
+    /// empty space. The window is last, and only when nothing remains.
+    func closeCommandAction() -> CloseCommandAction {
+        if let tree = currentSplitTree, tree.leaves.count > 1 || tree.focusedID != terminalGroupID { return .closeSplit }
+        if selectedShell != nil { return .closeShell }
+        if isFileManagerActive { return .leaveFiles }
+        if selectedAttachedEntry != nil { return .closePane }
+        if selectedSpace != nil { return .closeSpace }
+        if hasKeepAliveWork { return .keepWindow }
+        return .closeWindow
+    }
+
+    @discardableResult
+    func performCloseCommand() -> CloseCommandAction {
+        let action = closeCommandAction()
+        switch action {
+        case .closeSplit:
+            closeFocusedSplit()
+        case .closeShell:
+            if let id = selectedShellID { closeShellSession(id) }
+        case .leaveFiles:
+            isFileManagerActive = false
+        case .closePane:
+            if let entry = selectedAttachedEntry {
+                requestClosePane(entry.ref, name: entry.title)
+            }
+        case .closeSpace:
+            closeSelectedEmptySpace()
+        case .keepWindow, .closeWindow:
+            break
+        }
+        return action
+    }
+
+    func spaceEntry(for ref: SpaceRef) -> SpaceEntry? {
+        guard let device = device(ref.deviceID),
+              let workspace = session(ref.deviceID).workspaces.first(where: {
+                  $0.workspaceID == ref.workspaceID
+              })
+        else { return nil }
+        return SpaceEntry(device: device, workspace: workspace)
+    }
+
+    /// Second ⌘W on the empty-space placeholder. Tabs are already gone, so this
+    /// skips the sidebar's destructive confirmation.
+    func closeSelectedEmptySpace() {
+        guard let space = selectedSpace else { return }
+        guard let entry = spaceEntry(for: space) else {
+            selectedSpace = nil
+            return
+        }
+        if isRetainedSpace(space) {
+            dismissRetainedSpace(space)
+            return
+        }
+        markSpaceDismissed(space)
+        Task {
+            do {
+                closingSplitWorkspaces.insert(entry.ref)
+                defer { closingSplitWorkspaces.remove(entry.ref) }
+                try await service(for: entry.device)
+                    .closeWorkspace(workspaceID: entry.workspace.workspaceID)
+                for attach in attachSessions where attach.device.id == entry.device.id && attach.workspaceID == entry.workspace.workspaceID {
+                    discardSplitGroup(attach.id)
+                }
+                if selectedSpace == space { selectedSpace = nil }
+                await refresh(entry.device.id)
+            } catch {
+                actionError = actionErrorMessage(error, device: entry.device)
             }
         }
     }

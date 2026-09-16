@@ -600,8 +600,7 @@ struct OpenSettingsGearButton: View {
         Button {
             openWindow(id: "settings")
             DispatchQueue.main.async {
-                for window in NSApp.windows where window.identifier?.rawValue == "settings"
-                    || window.title == String(localized: "Settings") {
+                for window in NSApp.windows where CloseCommandRouting.isSettingsWindow(window) {
                     window.makeKeyAndOrderFront(nil)
                 }
             }

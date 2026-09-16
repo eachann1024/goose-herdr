@@ -4038,6 +4038,22 @@
         }
       }
     },
+    "Close Space": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Space"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭空间"
+          }
+        }
+      }
+    },
     "Go to Session 1": {
       "localizations": {
         "en": {
