@@ -1277,7 +1277,6 @@ struct AppearanceSettingsView: View {
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
     @AppStorage("app.theme") private var themePreference = "system"
     @AppStorage(AppLanguage.defaultsKey) private var language = AppLanguage.system.rawValue
-    @AppStorage(SidebarActionID.newTerminal.hiddenKey) private var newTerminalHidden = false
     @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
     @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
     @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
@@ -1340,9 +1339,6 @@ struct AppearanceSettingsView: View {
             }
             SettingsSection(title: "Quick Actions") {
                 SettingsRow {
-                    Toggle("New Terminal", isOn: Binding(get: { !newTerminalHidden }, set: { newTerminalHidden = !$0 }))
-                }
-                SettingsRow(divided: true) {
                     Toggle("New Space", isOn: Binding(get: { !newSpaceHidden }, set: { newSpaceHidden = !$0 }))
                 }
                 SettingsRow(divided: true) {
