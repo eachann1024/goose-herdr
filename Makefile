@@ -1,4 +1,4 @@
-.PHONY: gen build run test kit-test ssh-test mobile-build clean
+.PHONY: gen build install run test kit-test ssh-test mobile-build clean
 
 # GooseAgentMobile / HerdrSSH are arm64-only (libssh2 + OpenSSL xcframeworks).
 # Keep code signing on so Simulator Keychain (device SSH key) works; unsigned
@@ -18,15 +18,23 @@ SSH_TEST = cd Packages/HerdrSSH && xcodebuild test \
 	-parallel-testing-enabled NO
 
 CODE_SIGN_IDENTITY ?= -
+APP_BUNDLE = Goose Agent.app
+APP_BUILT = build/Build/Products/Debug/$(APP_BUNDLE)
 
 gen:
 	xcodegen generate
 
+# Compile, then install into /Applications (quit → replace → relaunch if needed).
 build: gen
-	xcodebuild -project GooseHerdr.xcodeproj -scheme GooseAgent -configuration Debug -derivedDataPath build build CODE_SIGN_IDENTITY="$(CODE_SIGN_IDENTITY)" CODE_SIGN_STYLE=Manual -skipPackagePluginValidation | tail -5
+	set -o pipefail; xcodebuild -project GooseHerdr.xcodeproj -scheme GooseAgent -configuration Debug -derivedDataPath build build CODE_SIGN_IDENTITY="$(CODE_SIGN_IDENTITY)" CODE_SIGN_STYLE=Manual -skipPackagePluginValidation | tee /tmp/goose-herdr-build.log | tail -8
+	./scripts/install-app.sh "$(CURDIR)/$(APP_BUILT)"
+
+# Install only (no rebuild) from the last Debug product.
+install:
+	./scripts/install-app.sh "$(CURDIR)/$(APP_BUILT)"
 
 run: build
-	open "build/Build/Products/Debug/Goose Agent.app"
+	open "/Applications/$(APP_BUNDLE)"
 
 kit-test:
 	cd Packages/HerdrKit && swift test

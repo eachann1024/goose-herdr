@@ -28,13 +28,9 @@ struct SidebarView: View {
     @State private var agentDrop: (id: String, after: Bool)?
     @State private var draggingTerminalID: String?
     @State private var terminalDrop: (id: String, after: Bool)?
-    @AppStorage(SidebarSectionID.spacesExpandedKey) private var spacesExpanded = true
-    @AppStorage(SidebarSectionID.agentsExpandedKey) private var agentsExpanded = true
-    @AppStorage(SidebarSectionID.terminalsExpandedKey) private var terminalsExpanded = true
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
-    @AppStorage(SidebarSectionID.agentsHiddenKey) private var agentsHidden = false
-    @AppStorage(SidebarSectionID.terminalsHiddenKey) private var terminalsHidden = false
-    @AppStorage(SidebarActionID.newAgent.hiddenKey) private var newAgentHidden = false
+    @AppStorage(SidebarSectionID.spacesExpandedKey) private var spacesExpanded = true
+    @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
     @AppStorage(SidebarActionID.newTerminal.hiddenKey) private var newTerminalHidden = false
     @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
     @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
@@ -56,53 +52,38 @@ struct SidebarView: View {
             Spacer().frame(height: 8)
 
             VStack(spacing: 1) {
-                if !newAgentHidden {
-                    quickActionRow(.newAgent) { model.showNewAgent = true }
-                }
-                // Terminals — herdr-owned or standalone — are listed under
-                // TERMINALS below; the ⌘D split beside an agent is separate.
                 if !newTerminalHidden {
-                    quickActionRow(.newTerminal) { model.showNewTerminal = true }
+                    quickActionRow(.newTerminal) { model.quickNewTerminal() }
                 }
-                // Also reachable from the folder.badge.plus by the Spaces
+                // Also reachable from the plus button by the Spaces
                 // header; promoted here alongside the other New … actions (#84).
                 if !newSpaceHidden {
-                    quickActionRow(.newSpace) { model.showNewSpace = true }
+                    quickActionRow(.newSpace) { model.toggleNewSpace() }
                 }
                 if !filesHidden {
-                    quickActionRow(.files) { model.openFileManager() }
+                    quickActionRow(.files) { model.toggleFileManager() }
                 }
                 if !searchHidden {
-                    quickActionRow(.search) { model.showSearch = true }
+                    quickActionRow(.search) { model.toggleSearch() }
                 }
             }
             .padding(.horizontal, 10)
 
-            if !newAgentHidden || !newTerminalHidden || !newSpaceHidden || !filesHidden || !searchHidden {
+            if !newTerminalHidden || !newSpaceHidden || !filesHidden || !searchHidden {
                 Spacer().frame(height: 10)
             }
 
             ScrollView {
                 VStack(spacing: 1) {
-                    // Title + chevron used to be a decorative HStack with no
-                    // tap target, so the chevron promised a disclosure that
-                    // never fired. Trailing New Space stays a sibling Button
-                    // so it does not toggle the section.
                     if !spacesHidden {
-                        groupHeader("Spaces", section: .spaces, expanded: $spacesExpanded) {
-                            Button {
+                        sectionHeader("Spaces") {
+                            sectionAddButton(
+                                systemImage: "plus",
+                                help: String(localized: "New Space") + " (\(AppShortcuts.display(for: .newSpace)))"
+                            ) {
                                 model.showNewSpace = true
-                            } label: {
-                                Image(systemName: "folder.badge.plus")
-                                    .font(.system(size: 11.5))
-                                    .foregroundStyle(Theme.textGhost)
-                                    .frame(width: 20, height: 20)
-                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
-                            .focusEffectDisabled()
-                            .help("New Space")
-
+                            .accessibilityLabel(Text("New Space"))
                         }
                         if spacesExpanded {
                             allSpacesRow
@@ -110,22 +91,20 @@ struct SidebarView: View {
                                 SpaceRowView(
                                     entry: entry,
                                     model: model,
+                                    isEmpty: model.isEmptySpace(entry),
                                     draggingSpaceID: $draggingSpaceID,
                                     spaceDrop: $spaceDrop
                                 )
                             }
                         }
-
-                        if !agentsHidden || !terminalsHidden {
-                            Spacer().frame(height: 10)
-                        }
+                        Spacer().frame(height: 10)
                     }
 
-                    if !agentsHidden {
-                        groupHeader("Agents", section: .agents, expanded: $agentsExpanded)
-                        if agentsExpanded {
-                            if model.visibleAgents.isEmpty {
-                                Text(emptyAgentsHint)
+                    Group {
+                            if model.visibleAgents.isEmpty
+                                && model.visibleTerminals.isEmpty
+                                && model.shellSessions.isEmpty {
+                                Text(emptySessionsHint)
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Theme.textGhost)
                                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -139,15 +118,6 @@ struct SidebarView: View {
                                     agentDrop: $agentDrop
                                 )
                             }
-                        }
-                    }
-
-                    if !terminalsHidden, (!model.visibleTerminals.isEmpty || !model.shellSessions.isEmpty) {
-                        if !agentsHidden || !spacesHidden {
-                            Spacer().frame(height: 10)
-                        }
-                        groupHeader("Terminals", section: .terminals, expanded: $terminalsExpanded)
-                        if terminalsExpanded {
                             ForEach(model.visibleTerminals) { entry in
                                 TerminalRowView(
                                     entry: entry,
@@ -164,7 +134,6 @@ struct SidebarView: View {
                                         }
                                     }
                             }
-                        }
                     }
                 }
                 .padding(.horizontal, 10)
@@ -177,57 +146,87 @@ struct SidebarView: View {
         .background(VisualEffectView(material: .sidebar).ignoresSafeArea())
     }
 
-    private var emptyAgentsHint: String {
+    private var emptySessionsHint: String {
         switch model.connection {
         case .connecting: return String(localized: "Connecting…")
         case .failed(let reason): return reason
-        default: return String(localized: "No agents")
+        default: return String(localized: "No sessions")
         }
     }
 
     // MARK: - Rows
 
+    private func quickActionSelected(_ id: SidebarActionID) -> Bool {
+        switch id {
+        case .files: return model.isFileManagerActive
+        case .search: return model.showSearch
+        case .newTerminal: return false
+        case .newSpace: return model.showNewSpace
+        }
+    }
+
     private func quickActionRow(_ id: SidebarActionID, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let selected = quickActionSelected(id)
+        let _ = shortcutsRevision
+        return Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: id.systemImage)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 20, height: 20)
+                Group {
+                    if id == .newSpace {
+                        SpaceIcon(systemName: id.systemImage)
+                    } else {
+                        Image(systemName: id.systemImage)
+                            .font(.system(size: 13, weight: .medium))
+                            .frame(width: 20, height: 20)
+                    }
+                }
+                .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                 Text(id.title)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textSecondary)
+                    .font(.system(size: 13, weight: selected ? .medium : .regular))
+                    .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                 Spacer()
             }
             .padding(.horizontal, 4)
             .frame(height: 32)
             .contentShape(Rectangle())
         }
-        .buttonStyle(SidebarRowButtonStyle())
+        .buttonStyle(SidebarRowButtonStyle(selected: selected))
         .focusEffectDisabled()
-        .help(id.title)
+        .help(quickActionHelp(id))
     }
 
 
-    private func groupHeader(
-        _ title: LocalizedStringKey,
-        section: SidebarSectionID,
-        expanded: Binding<Bool>
+
+    private func quickActionHelp(_ id: SidebarActionID) -> Text {
+        switch id {
+        case .newTerminal: return Text(id.title) + Text(" (\(AppShortcuts.display(for: .quickNewTerminal)))")
+        case .newSpace: return Text(id.title) + Text(" (\(AppShortcuts.display(for: .newSpace)))")
+        case .search: return Text(id.title) + Text(" (⌘K)")
+        case .files: return Text(id.title)
+        }
+    }
+
+    private func sectionAddButton(
+        systemImage: String,
+        help: String,
+        action: @escaping () -> Void
     ) -> some View {
-        groupHeader(title, section: section, expanded: expanded) { EmptyView() }
+        Button(action: action) {
+            SpaceIcon(systemName: systemImage, size: 10)
+                .foregroundStyle(Theme.textGhost)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .help(help)
     }
 
-    private func groupHeader<Trailing: View>(
+    private func sectionHeader<Trailing: View>(
         _ title: LocalizedStringKey,
-        section: SidebarSectionID,
-        expanded: Binding<Bool>,
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(spacing: 5) {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    expanded.wrappedValue.toggle()
-                }
+                withAnimation(.easeInOut(duration: 0.2)) { spacesExpanded.toggle() }
             } label: {
                 HStack(spacing: 5) {
                     Text(title)
@@ -236,7 +235,7 @@ struct SidebarView: View {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(Theme.textGhost)
-                        .rotationEffect(.degrees(expanded.wrappedValue ? 90 : 0))
+                        .rotationEffect(.degrees(spacesExpanded ? 90 : 0))
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
@@ -244,10 +243,8 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .focusEffectDisabled()
             .accessibilityLabel(title)
-            .disclosureAccessibility(expanded: expanded.wrappedValue)
-
+            .accessibilityValue(Text(spacesExpanded ? "Expanded" : "Collapsed"))
             trailing()
-
         }
         .padding(.horizontal, 8)
         .frame(height: 28)
@@ -260,17 +257,18 @@ struct SidebarView: View {
             model.selectSpace(nil)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 11.5))
+                BrandIcon(resource: "all-spaces", size: 14, fallbackSystemName: "square.stack")
+                    .frame(width: 20, height: 20)
                     .foregroundStyle(selected ? Theme.textSecondary : Theme.textTertiary)
+                    .accessibilityHidden(true)
                 Text("All Spaces")
                     .font(.system(size: 13))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                 Spacer()
-                SpaceAttentionGlyph(attention: model.scopeAttention)
                 Text("\(model.scopeAgentCount)")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textGhost)
+                    .frame(minWidth: 20)
             }
             .padding(.horizontal, 8)
             .frame(height: 30)
@@ -544,14 +542,7 @@ struct SidebarView: View {
 
             Spacer()
 
-            SettingsLink {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(Theme.textTertiary)
-                    .frame(width: 26, height: 26)
-            }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
+            OpenSettingsGearButton()
         }
         .padding(.horizontal, 10)
         .frame(height: 40)
@@ -564,6 +555,30 @@ struct SidebarView: View {
         case .failed: return Theme.danger
         case .idle: return Theme.textGhost
         }
+    }
+}
+
+struct OpenSettingsGearButton: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button {
+            openWindow(id: "settings")
+            DispatchQueue.main.async {
+                for window in NSApp.windows where window.identifier?.rawValue == "settings"
+                    || window.title == String(localized: "Settings") {
+                    window.makeKeyAndOrderFront(nil)
+                }
+            }
+        } label: {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12.5))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 26, height: 26)
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .help(String(localized: "Settings"))
     }
 }
 
@@ -792,13 +807,18 @@ private extension View {
                 }
             }
     }
+}
 
-    /// Button trait plus expanded/collapsed so VoiceOver matches the chevron.
-    /// macOS SwiftUI has no `accessibilityExpanded`; VoiceOver reads the value.
-    func disclosureAccessibility(expanded: Bool) -> some View {
-        self
-            .accessibilityAddTraits(.isButton)
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+private struct EmptySpaceHelp: ViewModifier {
+    let isEmpty: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEmpty {
+            content.help(String(localized: "No terminals — click to create one"))
+        } else {
+            content
+        }
     }
 }
 
@@ -815,33 +835,86 @@ struct SidebarRowButtonStyle: ButtonStyle {
     }
 }
 
+private struct SpaceIcon: View {
+    let systemName: String
+    var size: CGFloat = 14
+
+    var body: some View {
+        Image(systemName: systemName)
+            .resizable()
+            .scaledToFit()
+            .font(.system(size: size, weight: .regular))
+            .frame(width: size, height: size)
+            .frame(width: 20, height: 20)
+    }
+}
+
+private struct ProjectSpaceIcon: View {
+    let path: String?
+    @State private var image: CGImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(decorative: image, scale: 2)
+                    .resizable()
+                    .renderingMode(.original)
+                    .scaledToFit()
+                    .frame(width: 14, height: 14)
+                    .frame(width: 20, height: 20)
+            } else {
+                SpaceIcon(systemName: "square", size: 12)
+            }
+        }
+        .accessibilityHidden(true)
+        .task(id: path) {
+            image = nil
+            guard let path else { return }
+            let loaded = await ProjectIconLoader.shared.image(for: path)
+            guard !Task.isCancelled else { return }
+            image = loaded
+        }
+    }
+}
+
 /// Not a `Button`: on macOS, `Button` consumes mouseDown so SwiftUI `.onDrag`
 /// never starts. Click and reorder go through `SpaceRowDragHost`.
 private struct SpaceRowView: View {
     let entry: AppModel.SpaceEntry
     @ObservedObject var model: AppModel
+    let isEmpty: Bool
     @Binding var draggingSpaceID: String?
     @Binding var spaceDrop: (id: String, after: Bool)?
     @State private var hovered = false
 
     var body: some View {
         let selected = model.selectedSpace == entry.ref
+        let nameColor: Color = isEmpty
+            ? Theme.textGhost
+            : (selected ? Theme.text : Theme.textSecondary)
+        let iconColor: Color = isEmpty
+            ? Theme.textGhost
+            : (selected ? Theme.textSecondary : Theme.textTertiary)
         HStack(spacing: 8) {
-            Image(systemName: "folder")
-                .font(.system(size: 11.5))
-                .foregroundStyle(selected ? Theme.textSecondary : Theme.textTertiary)
+            ProjectSpaceIcon(path: entry.device.isLocal ? model.spacePath(for: entry) : nil)
+                .foregroundStyle(iconColor)
             Text(entry.workspace.label)
                 .font(.system(size: 13))
-                .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
+                .foregroundStyle(nameColor)
                 .lineLimit(1)
             Spacer()
-            SpaceAttentionGlyph(attention: model.attention(in: entry))
-            if model.showsRowDeviceBadges {
+            if !isEmpty {
+                SpaceAttentionGlyph(attention: model.attention(in: entry))
+                if model.showsRowDeviceBadges {
+                    DeviceChip(device: entry.device)
+                }
+                Text("\(model.agentCount(in: entry))")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textGhost)
+                    .frame(minWidth: 20)
+            } else if model.showsRowDeviceBadges {
                 DeviceChip(device: entry.device)
             }
-            Text("\(model.agentCount(in: entry))")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textGhost)
         }
         .padding(.horizontal, 8)
         .frame(height: 30)
@@ -860,8 +933,14 @@ private struct SpaceRowView: View {
             SpaceRowDragHost(
                 entryID: entry.id,
                 label: entry.workspace.label,
-                onClick: { model.selectSpace(entry.ref) },
+                onClick: { model.activateSpace(entry.ref) },
                 onRename: { model.spaceToRename = entry },
+                onCopyPath: model.spacePath(for: entry).map { path in
+                    {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(path, forType: .string)
+                    }
+                },
                 onClose: { model.requestCloseSpace(entry) },
                 onDragStart: { draggingSpaceID = $0 },
                 onDragEnd: {
@@ -886,12 +965,14 @@ private struct SpaceRowView: View {
             )
         }
         .accessibilityAddTraits(.isButton)
-        .accessibilityAction { model.selectSpace(entry.ref) }
+        .accessibilityAction { model.activateSpace(entry.ref) }
         .accessibilityLabel(accessibilityLabel)
+        .modifier(EmptySpaceHelp(isEmpty: isEmpty))
     }
 
     private var accessibilityLabel: String {
         var parts = [entry.workspace.label]
+        if isEmpty { parts.append(String(localized: "No terminals")) }
         switch model.attention(in: entry) {
         case .blocked: parts.append(String(localized: "Needs input"))
         case .unreadDone: parts.append(String(localized: "Unread"))

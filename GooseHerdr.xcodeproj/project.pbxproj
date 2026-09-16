@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02C86337DF7E0E5E7EA1D2BA /* devin.svg in Resources */ = {isa = PBXBuildFile; fileRef = 5D00FF1D7FF01EC2FA0C7EC9 /* devin.svg */; };
 		0C81EC00775EB5F805FA8A9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67AF5692D3507468CBB4629D /* Assets.xcassets */; };
+		0FD082AAB832B3BAE12A0B66 /* all-spaces.svg in Resources */ = {isa = PBXBuildFile; fileRef = C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */; };
 		11DC94441DEF561728A6BA9E /* fedora.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1A71AF60D595A5A16AF7631B /* fedora.svg */; };
 		14D8D423703F80E20243711D /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 3482681EFD0E64BA6FC21FA1 /* HerdrSSH */; };
 		157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 72C4468DFABCE812360B4E91 /* Localizable.xcstrings */; };
@@ -16,11 +17,13 @@
 		1CF771238F5891EFCD8FAF3D /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5743D33617E2DB7CD44D219 /* TerminalView.swift */; };
 		20D6AE804E142787A0DCB8A0 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A37DF529D06B06944D4383 /* SearchView.swift */; };
 		24133119D69052C790F42D6E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 524DE7449C9FA70A3E067466 /* AppIcon.icon */; };
+		26AB9E8D367E1F8EC473BCB6 /* ProjectIconLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04147915C949F3CDC133842C /* ProjectIconLoader.swift */; };
 		28C8AF5A37E9F0AE4530F3D2 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 5862B6EF6B0151336816D4AA /* GhosttyTerminal */; };
 		2CA9C20DEA51AFB914D518AB /* SplitContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD73906300DC1BA152C6409 /* SplitContainer.swift */; };
 		2E1C027CF005EC87C2F2CB11 /* rockylinux.svg in Resources */ = {isa = PBXBuildFile; fileRef = A1D631BB14B24F79C711B9B2 /* rockylinux.svg */; };
 		3020D3CDE7F8AA0D61E461F1 /* qwen.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1A74755801354B09B6BF9731 /* qwen.svg */; };
 		339C4E11C5E5D1AD51B8E516 /* GooseAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DFA02031D0856B0CEB9656 /* GooseAgentApp.swift */; };
+		37BD93394E10D24CF8D23D16 /* KeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72327B4546E99876461D4B64 /* KeyboardShortcuts.swift */; };
 		38160F631582B5624DD37274 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA02FF2AFA8457CEC8CD683 /* AppLanguage.swift */; };
 		39586062BFFAF656922B1F5F /* HerdrTailcat in Frameworks */ = {isa = PBXBuildFile; productRef = A0D03B3E1623428777A38FD7 /* HerdrTailcat */; };
 		3A380AACFB03B3907245B12C /* ubuntu.svg in Resources */ = {isa = PBXBuildFile; fileRef = 7AA8AF251BA707869E0CF6FF /* ubuntu.svg */; };
@@ -88,6 +91,7 @@
 
 /* Begin PBXFileReference section */
 		0025534BB4835BD94F3EAAD7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		04147915C949F3CDC133842C /* ProjectIconLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectIconLoader.swift; sourceTree = "<group>"; };
 		09F7FBEF72B1F403289EED32 /* FocusRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRing.swift; sourceTree = "<group>"; };
 		0C75BF1A91360DCB5AB6E1CA /* grok.svg */ = {isa = PBXFileReference; path = grok.svg; sourceTree = "<group>"; };
 		0FA778653F2468166B8CF28E /* HerdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrKit; path = Packages/HerdrKit; sourceTree = SOURCE_ROOT; };
@@ -120,6 +124,7 @@
 		67AF5692D3507468CBB4629D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BDD68618550AFA8888C0916 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		6FA547EDBB7C5AD4B137CE1E /* MobileDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDevice.swift; sourceTree = "<group>"; };
+		72327B4546E99876461D4B64 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
 		72C4468DFABCE812360B4E91 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 		745165B27185A5B902096F2C /* archlinux.svg */ = {isa = PBXFileReference; path = archlinux.svg; sourceTree = "<group>"; };
 		75E79B1392983D37150864D0 /* GooseAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GooseAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -145,6 +150,7 @@
 		B8263284FF35B61A72A6E7E7 /* HerdrTailcat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrTailcat; path = Packages/HerdrTailcat; sourceTree = SOURCE_ROOT; };
 		C11021DE4CAACE009A494C76 /* HerdrSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrSSH; path = Packages/HerdrSSH; sourceTree = SOURCE_ROOT; };
 		C14464C61F909AFF06F748E9 /* codex-color.svg */ = {isa = PBXFileReference; path = "codex-color.svg"; sourceTree = "<group>"; };
+		C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */ = {isa = PBXFileReference; path = "all-spaces.svg"; sourceTree = "<group>"; };
 		C5743D33617E2DB7CD44D219 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		C62E9FA0ADE8F0873086AC01 /* herdrm-icon-rounded.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "herdrm-icon-rounded.png"; sourceTree = "<group>"; };
 		D0EACC72F6F0F82D73AE7C9D /* moonshot.svg */ = {isa = PBXFileReference; path = moonshot.svg; sourceTree = "<group>"; };
@@ -253,7 +259,9 @@
 				09F7FBEF72B1F403289EED32 /* FocusRing.swift */,
 				A0DFA02031D0856B0CEB9656 /* GooseAgentApp.swift */,
 				0025534BB4835BD94F3EAAD7 /* Info.plist */,
+				72327B4546E99876461D4B64 /* KeyboardShortcuts.swift */,
 				A1244C5780C2545B4A1A6EC3 /* NotificationManager.swift */,
+				04147915C949F3CDC133842C /* ProjectIconLoader.swift */,
 				E2A37DF529D06B06944D4383 /* SearchView.swift */,
 				490C5502F40B0CD714744DE1 /* SidebarSection.swift */,
 				6BDD68618550AFA8888C0916 /* SidebarView.swift */,
@@ -311,6 +319,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		CBF0304F2EF5893C2DD9AC3E /* SpaceIcons */ = {
+			isa = PBXGroup;
+			children = (
+				C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */,
+			);
+			path = SpaceIcons;
+			sourceTree = "<group>";
+		};
 		E517433ABA1F43A1FF076848 /* GooseAgentMobile */ = {
 			isa = PBXGroup;
 			children = (
@@ -344,6 +360,7 @@
 				03572F915F58E27514FA3790 /* AppIcon */,
 				E5A42FA4BD13D3AA5E217936 /* Fonts */,
 				85071FB04724F297F1FF9E9B /* OSIcons */,
+				CBF0304F2EF5893C2DD9AC3E /* SpaceIcons */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -450,6 +467,7 @@
 				157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */,
 				FE157D7275F385DD6FA522DE /* SymbolsNerdFont-LICENSE.txt in Resources */,
 				8E7B62F6F5072CAED94E1381 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
+				0FD082AAB832B3BAE12A0B66 /* all-spaces.svg in Resources */,
 				744E7514D2D52623496AE761 /* alpinelinux.svg in Resources */,
 				FC950F7702CD2098EE70920A /* amp-color.svg in Resources */,
 				DE13A3CEDFA483F4D62F840A /* amp.svg in Resources */,
@@ -522,7 +540,9 @@
 				D536BA63E42FC0EFEEB9E4B5 /* DeviceFilesView.swift in Sources */,
 				47ED40472F2336B0B526469E /* FocusRing.swift in Sources */,
 				339C4E11C5E5D1AD51B8E516 /* GooseAgentApp.swift in Sources */,
+				37BD93394E10D24CF8D23D16 /* KeyboardShortcuts.swift in Sources */,
 				5A287607F4018DF2B8FB30FD /* NotificationManager.swift in Sources */,
+				26AB9E8D367E1F8EC473BCB6 /* ProjectIconLoader.swift in Sources */,
 				20D6AE804E142787A0DCB8A0 /* SearchView.swift in Sources */,
 				975C9FF6FEFC8B8D4D2EC5B4 /* SidebarSection.swift in Sources */,
 				53B440919C3A4A2765B64EA9 /* SidebarView.swift in Sources */,

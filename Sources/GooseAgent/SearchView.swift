@@ -151,7 +151,7 @@ struct SearchSheet: View {
             .padding(.horizontal, 14)
             .frame(height: 28)
         }
-        .frame(width: 440)
+        .frame(minWidth: 440, idealWidth: 440, maxWidth: 440)
         .herdrmHideFocusRing()
         .onAppear { fieldFocused = true }
         .onChange(of: query) { _, _ in highlighted = 0 }
@@ -216,16 +216,22 @@ struct SearchSheet: View {
                     device: entry.device
                 )
             case .space(let entry):
+                let empty = model.isEmptySpace(entry)
                 Image(systemName: "folder")
                     .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
+                    .foregroundStyle(empty ? Theme.textGhost : Theme.textSecondary)
                     .frame(width: 16)
                 Text(entry.workspace.label)
                     .font(.system(size: 13))
-                    .foregroundStyle(Theme.text)
+                    .foregroundStyle(empty ? Theme.textGhost : Theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                trailing(String(localized: "Space · \(model.agentCount(in: entry)) agents"), device: entry.device)
+                trailing(
+                    empty
+                        ? String(localized: "No terminals — click to create one")
+                        : String(localized: "Space · \(model.agentCount(in: entry)) agents"),
+                    device: entry.device
+                )
             }
         }
         .padding(.horizontal, 10)
@@ -265,7 +271,7 @@ struct SearchSheet: View {
             if let filter = model.deviceFilter, filter != entry.device.id {
                 model.setDeviceFilter(nil)
             }
-            model.selectSpace(entry.ref)
+            model.activateSpace(entry.ref)
         }
         dismiss()
     }

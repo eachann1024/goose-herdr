@@ -344,20 +344,29 @@ final class LineBreakTerminalView: AppTerminalView {
     /// Fixed at mouse-down so press, motion and release cannot split between
     /// the TUI and Ghostty's local selection.
     private var gestureIsLocal = false
-    /// A locally handled Command-C must consume its matching release too;
-    /// kitty report-events applications otherwise receive a release-only key.
-    private var locallyConsumedCopyKeyCode: UInt16?
+    /// A locally handled key must consume its matching release too; kitty
+    /// report-events applications otherwise receive a release-only key.
+    private var locallyConsumedKeyCode: UInt16?
 
     // MARK: Keyboard
 
     override func keyDown(with event: NSEvent) {
-        locallyConsumedCopyKeyCode = nil
+        locallyConsumedKeyCode = nil
         if hasMarkedText() {
             // Command/Control chords must stay with the IME until composition
             // ends; other keys still reach Ghostty so preedit can update.
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             if modifiers.contains(.command) || modifiers.contains(.control) { return }
             super.keyDown(with: event)
+            return
+        }
+        // Pure Option shortcuts bypass performKeyEquivalent for first-responder views.
+        let modifiers = event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .intersection([.command, .control, .option, .shift])
+        if !modifiers.isEmpty,
+           NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            locallyConsumedKeyCode = event.keyCode
             return
         }
         if let payload = Self.ptyBytes(forMacEditingKey: event) {
@@ -368,8 +377,8 @@ final class LineBreakTerminalView: AppTerminalView {
     }
 
     override func keyUp(with event: NSEvent) {
-        if locallyConsumedCopyKeyCode == event.keyCode {
-            locallyConsumedCopyKeyCode = nil
+        if locallyConsumedKeyCode == event.keyCode {
+            locallyConsumedKeyCode = nil
             return
         }
         super.keyUp(with: event)
@@ -547,7 +556,7 @@ final class LineBreakTerminalView: AppTerminalView {
             .subtracting([.capsLock, .numericPad])
         if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "c" {
             if attachedSurface?.hasSelection() == true {
-                locallyConsumedCopyKeyCode = event.keyCode
+                locallyConsumedKeyCode = event.keyCode
                 copyLocalSelection()
             } else {
                 keyDown(with: event)
@@ -560,7 +569,9 @@ final class LineBreakTerminalView: AppTerminalView {
         }
         // Ghostty consumes its default bindings before AppKit reaches the menu.
         // Give HerdrM's commands priority over those standalone-terminal actions.
-        if modifiers.contains(.command), NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+        if !modifiers.isDisjoint(with: [.command, .control, .option, .shift]),
+           NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
+            locallyConsumedKeyCode = event.keyCode
             return true
         }
         return super.performKeyEquivalent(with: event)

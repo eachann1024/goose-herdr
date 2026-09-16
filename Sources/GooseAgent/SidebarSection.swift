@@ -1,49 +1,12 @@
 import SwiftUI
 
-/// Sidebar blocks / quick-action rows that can be persistently hidden one by one.
-enum SidebarSectionID: String, CaseIterable, Identifiable {
-    case spaces
-    case agents
-    case terminals
-
-    var id: String { rawValue }
-
+enum SidebarSectionID {
     static let spacesHiddenKey = "sidebar.spacesHidden"
-    static let agentsHiddenKey = "sidebar.agentsHidden"
-    static let terminalsHiddenKey = "sidebar.terminalsHidden"
-
     static let spacesExpandedKey = "sidebar.spacesExpanded"
-    static let agentsExpandedKey = "sidebar.agentsExpanded"
-    static let terminalsExpandedKey = "sidebar.terminalsExpanded"
-
-    var title: LocalizedStringKey {
-        switch self {
-        case .spaces: return "Spaces"
-        case .agents: return "Agents"
-        case .terminals: return "Terminals"
-        }
-    }
-
-    var hideHelp: LocalizedStringKey {
-        switch self {
-        case .spaces: return "Hide Spaces"
-        case .agents: return "Hide Agents"
-        case .terminals: return "Hide Terminals"
-        }
-    }
-
-    var hiddenKey: String {
-        switch self {
-        case .spaces: return Self.spacesHiddenKey
-        case .agents: return Self.agentsHiddenKey
-        case .terminals: return Self.terminalsHiddenKey
-        }
-    }
 }
 
 /// Top quick-action rows — each hidden independently.
 enum SidebarActionID: String, CaseIterable, Identifiable {
-    case newAgent
     case newTerminal
     case newSpace
     case files
@@ -55,7 +18,6 @@ enum SidebarActionID: String, CaseIterable, Identifiable {
 
     var title: LocalizedStringKey {
         switch self {
-        case .newAgent: return "New Agent"
         case .newTerminal: return "New Terminal"
         case .newSpace: return "New Space"
         case .files: return "Files"
@@ -63,39 +25,42 @@ enum SidebarActionID: String, CaseIterable, Identifiable {
         }
     }
 
-    var hideHelp: LocalizedStringKey {
-        switch self {
-        case .newAgent: return "Hide New Agent"
-        case .newTerminal: return "Hide New Terminal"
-        case .newSpace: return "Hide New Space"
-        case .files: return "Hide Files"
-        case .search: return "Hide Search"
-        }
-    }
-
     var systemImage: String {
         switch self {
-        case .newAgent: return "square.and.pencil"
         case .newTerminal: return "terminal"
-        case .newSpace: return "folder.badge.plus"
+        case .newSpace: return "plus"
         case .files: return "folder"
         case .search: return "magnifyingglass"
         }
     }
 }
 
-/// Which agent kinds appear in the New Agent sheet. Missing key = enabled.
-enum AgentKindVisibility {
-    static let defaultsKey = "agents.kindVisibility"
+/// Display order for agent kinds in Settings and the Agent menu.
+enum AgentKindOrder {
+    static let defaultsKey = "agents.kindOrder"
 
-    static func isEnabled(_ kind: String, store: UserDefaults = .standard) -> Bool {
-        let map = store.dictionary(forKey: defaultsKey) as? [String: Bool] ?? [:]
-        return map[kind] ?? true
+    static func load(store: UserDefaults = .standard) -> [String] {
+        store.stringArray(forKey: defaultsKey) ?? []
     }
 
-    static func setEnabled(_ kind: String, _ enabled: Bool, store: UserDefaults = .standard) {
-        var map = store.dictionary(forKey: defaultsKey) as? [String: Bool] ?? [:]
-        map[kind] = enabled
-        store.set(map, forKey: defaultsKey)
+    static func save(_ order: [String], store: UserDefaults = .standard) {
+        if order.isEmpty {
+            store.removeObject(forKey: defaultsKey)
+        } else {
+            store.set(order, forKey: defaultsKey)
+        }
+    }
+
+    /// Saved order first; kinds missing from the save keep their relative input order at the end.
+    static func sorted(_ kinds: [String], store: UserDefaults = .standard) -> [String] {
+        let saved = load(store: store)
+        var result: [String] = []
+        for kind in saved where kinds.contains(kind) && !result.contains(kind) {
+            result.append(kind)
+        }
+        for kind in kinds where !result.contains(kind) {
+            result.append(kind)
+        }
+        return result
     }
 }

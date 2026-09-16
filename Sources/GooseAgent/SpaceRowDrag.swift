@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 enum SidebarContextMenuItem {
-    case item(title: String, action: () -> Void)
+    case item(title: String, action: () -> Void, isEnabled: Bool = true)
     case destructive(title: String, action: () -> Void)
     case separator
 }
@@ -57,6 +57,7 @@ struct SpaceRowDragHost: View {
     let label: String
     let onClick: () -> Void
     let onRename: () -> Void
+    let onCopyPath: (() -> Void)?
     let onClose: () -> Void
     let onDragStart: (String) -> Void
     let onDragEnd: () -> Void
@@ -70,6 +71,11 @@ struct SpaceRowDragHost: View {
             pasteboardType: SidebarRowDragNSView.spacePasteboardType,
             menuItems: [
                 .item(title: String(localized: "Rename Space…"), action: onRename),
+                .item(
+                    title: String(localized: "Copy Space Path"),
+                    action: { onCopyPath?() },
+                    isEnabled: onCopyPath != nil
+                ),
                 .separator,
                 .destructive(title: String(localized: "Close Space \"\(label)\"…"), action: onClose),
             ],
@@ -223,9 +229,10 @@ final class SidebarRowDragNSView: NSView, NSDraggingSource {
             switch item {
             case .separator:
                 menu.addItem(.separator())
-            case .item(let title, let action):
+            case .item(let title, let action, let isEnabled):
                 let menuItem = menu.addItem(withTitle: title, action: #selector(runMenuItem(_:)), keyEquivalent: "")
                 menuItem.target = self
+                menuItem.isEnabled = isEnabled
                 menuItem.representedObject = MenuAction(action)
             case .destructive(let title, let action):
                 let menuItem = menu.addItem(withTitle: title, action: #selector(runMenuItem(_:)), keyEquivalent: "")

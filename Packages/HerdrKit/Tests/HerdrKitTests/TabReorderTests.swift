@@ -56,17 +56,17 @@ final class TabReorderTests: XCTestCase {
             WorkspaceInfo(
                 workspaceID: "wD", number: 1, label: "herdrm",
                 focused: true, paneCount: 2, tabCount: 2,
-                activeTabID: "wD:t5", agentStatusRaw: nil
+                activeTabID: "wD:t5", agentStatusRaw: nil, cwd: nil
             ),
         ]
         let tabs = [
             TabInfo(
                 tabID: "wD:t5", workspaceID: "wD", number: 5, label: "5",
-                focused: true, paneCount: 1, agentStatusRaw: nil
+                focused: true, paneCount: 1, agentStatusRaw: nil, cwd: nil
             ),
             TabInfo(
                 tabID: "wD:t1", workspaceID: "wD", number: 1, label: "2",
-                focused: false, paneCount: 1, agentStatusRaw: nil
+                focused: false, paneCount: 1, agentStatusRaw: nil, cwd: nil
             ),
         ]
         XCTAssertEqual(

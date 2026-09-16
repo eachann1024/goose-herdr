@@ -7,6 +7,8 @@ struct RootView: View {
     @ObservedObject var model: AppModel
     // Deliberately not persisted: the app always launches with the sidebar visible.
     @State private var sidebarCollapsed = false
+    @State private var newSpaceListing: NewSpaceListing?
+    @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
@@ -57,10 +59,14 @@ struct RootView: View {
         .frame(minWidth: 980, minHeight: 620)
         .herdrmHideFocusRing()
         .onAppear { model.start() }
+        .onChange(of: spacesHidden, initial: true) { _, _ in
+            model.synchronizeSpaceVisibility()
+        }
         .sheet(isPresented: $model.showAddDevice) { AddDeviceSheet(model: model) }
-        .sheet(isPresented: $model.showNewAgent) { NewAgentSheet(model: model) }
-        .sheet(isPresented: $model.showNewTerminal) { NewTerminalSheet(model: model) }
-        .sheet(isPresented: $model.showNewSpace) { NewSpaceSheet(model: model) }
+        .task(id: model.showNewSpace) { await prepareNewSpace() }
+        .sheet(item: $newSpaceListing, onDismiss: { model.showNewSpace = false }) { listing in
+            NewSpaceSheet(model: model, listing: listing)
+        }
         .sheet(item: $model.spaceToRename) { entry in RenameSpaceSheet(model: model, entry: entry) }
         .sheet(item: $model.agentToRename) { entry in RenameAgentSheet(model: model, entry: entry) }
         .sheet(item: $model.terminalToRename) { entry in RenameTerminalSheet(model: model, entry: entry) }
@@ -95,23 +101,61 @@ struct RootView: View {
             Text(model.closeRequest?.message ?? "")
         }
     }
+
+    @MainActor
+    private func prepareNewSpace() async {
+        guard model.showNewSpace else {
+            newSpaceListing = nil
+            return
+        }
+        let device = model.deviceFilter.flatMap { model.device($0) } ?? model.devices.first ?? .local
+        do {
+            let entries = try await model.service(for: device).listDirectories(at: "~")
+            guard !Task.isCancelled, model.showNewSpace else { return }
+            newSpaceListing = NewSpaceListing(device: device, entries: entries)
+        } catch {
+            guard !Task.isCancelled, model.showNewSpace else { return }
+            model.showNewSpace = false
+            model.actionError = error.localizedDescription
+        }
+    }
 }
 
-/// Titlebar metrics: 28pt matches the system traffic-light centerline (14pt) exactly.
+/// The custom title strip is the source of truth for window-button alignment.
 enum TitlebarMetrics {
     static let height: CGFloat = 28
     static let trafficLightClearance: CGFloat = 78
 }
 
 private struct WindowTitlebarInteraction: NSViewRepresentable {
+    var alignsWindowButtons = false
+
     func makeNSView(context _: Context) -> NSView {
-        WindowTitlebarInteractionView()
+        let view = WindowTitlebarInteractionView()
+        view.alignsWindowButtons = alignsWindowButtons
+        return view
     }
 
     func updateNSView(_: NSView, context _: Context) {}
 }
 
 private final class WindowTitlebarInteractionView: NSView {
+    var alignsWindowButtons = false
+
+    override func layout() {
+        super.layout()
+        alignWindowButtons()
+    }
+
+    private func alignWindowButtons() {
+        guard alignsWindowButtons, bounds.height > 0, let window,
+              !window.styleMask.contains(.fullScreen) else { return }
+        for kind in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            guard let button = window.standardWindowButton(kind), let parent = button.superview else { continue }
+            let center = convert(NSPoint(x: bounds.midX, y: bounds.midY), to: parent)
+            button.setFrameOrigin(NSPoint(x: button.frame.minX, y: center.y - button.frame.height / 2))
+        }
+    }
     private static let fillRestoreFrames =
         NSMapTable<NSWindow, NSValue>(keyOptions: .weakMemory, valueOptions: .strongMemory)
     private var rememberFrameWorkItem: DispatchWorkItem?
@@ -125,6 +169,7 @@ private final class WindowTitlebarInteractionView: NSView {
         rememberFrameWorkItem?.cancel()
         NotificationCenter.default.removeObserver(self)
         guard let window else { return }
+        DispatchQueue.main.async { [weak self] in self?.alignWindowButtons() }
         Self.rememberNonFilledFrame(of: window)
         NotificationCenter.default.addObserver(
             self,
@@ -146,6 +191,7 @@ private final class WindowTitlebarInteractionView: NSView {
     }
 
     @objc private func windowFrameDidChange(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in self?.alignWindowButtons() }
         guard let window = notification.object as? NSWindow else { return }
         rememberFrameWorkItem?.cancel()
         let item = DispatchWorkItem { [weak window] in
@@ -245,15 +291,17 @@ private final class WindowTitlebarInteractionView: NSView {
 }
 
 private struct WindowTitlebarInteractionModifier: ViewModifier {
+    var alignsWindowButtons: Bool
+
     func body(content: Content) -> some View {
         content
-            .background(WindowTitlebarInteraction())
+            .background(WindowTitlebarInteraction(alignsWindowButtons: alignsWindowButtons))
     }
 }
 
 extension View {
-    func windowTitlebarInteraction() -> some View {
-        modifier(WindowTitlebarInteractionModifier())
+    func windowTitlebarInteraction(alignsWindowButtons: Bool = false) -> some View {
+        modifier(WindowTitlebarInteractionModifier(alignsWindowButtons: alignsWindowButtons))
     }
 }
 
@@ -399,7 +447,7 @@ struct DetailView: View {
         .padding(.leading, sidebarCollapsed ? 10 : 14)
         .padding(.trailing, 12)
         .frame(height: TitlebarMetrics.height)
-        .windowTitlebarInteraction()
+        .windowTitlebarInteraction(alignsWindowButtons: true)
     }
 
     @ViewBuilder
@@ -587,13 +635,12 @@ struct DetailView: View {
                 Text(placeholderText)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textTertiary)
-                if showsStartAgentShortcut {
-                    Button("New Agent…") {
-                        model.showNewAgent = true
-                    }
-                    .controlSize(.small)
-                    .focusEffectDisabled()
-                } else if model.hasReconnectableDevice {
+                Button("New Terminal") {
+                    model.quickNewTerminal()
+                }
+                .controlSize(.small)
+                .focusEffectDisabled()
+                if model.hasReconnectableDevice {
                     Button("Reconnect") {
                         model.reconnectFailedDevices()
                     }
@@ -643,7 +690,8 @@ struct DetailView: View {
                 .id("attach-\(session.id)-\(attachRetry[session.id] ?? 0)")
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
-            if isSelected, endedAttach[session.id] != nil {
+            if isSelected, endedAttach[session.id] != nil,
+               !model.closingPanes.contains(session.ref) {
                 attachEndedOverlay(session)
             }
         }
@@ -700,11 +748,6 @@ struct DetailView: View {
         .padding(.bottom, 18)
     }
 
-    private var showsStartAgentShortcut: Bool {
-        if case .connected = model.connection { return true }
-        return false
-    }
-
     private var placeholderText: String {
         switch model.connection {
         case .connecting: return String(localized: "Connecting…")
@@ -713,7 +756,7 @@ struct DetailView: View {
             if model.selectedSpace != nil
                 && model.visibleAgents.isEmpty
                 && model.visibleTerminals.isEmpty {
-                return String(localized: "No agents or terminals in this space yet")
+                return String(localized: "This space has no terminals. Click the space name to create one.")
             }
             return String(localized: "Select an agent or terminal, or start a new one")
         }
@@ -764,23 +807,26 @@ struct AddDeviceSheet: View {
                 TextField("mac-studio", text: $name)
                     .textFieldStyle(.roundedBorder)
                 Spacer().frame(height: 8)
-                if transport == .ssh {
-                    SheetSectionLabel("SSH TARGET")
-                    TextField("vincent@10.10.10.87", text: $target)
-                        .textFieldStyle(.roundedBorder)
-                    Text("user@host, a ~/.ssh/config alias, or user@host:port for a custom port.")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textTertiary)
-                } else {
-                    SheetSectionLabel("TAILCAT TOKEN")
-                    TextField("tcpGFwWCD…", text: $token)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 11, design: .monospaced))
-                    Text("On the remote Mac: `herdr plugin install lbr77/herdr-plugin-tailcat`, then `herdr plugin action invoke herdr.tailcat.token` and paste the token here. The WireGuard tunnel is built in — no external tool. The token is stored in the Keychain. Standalone shells and the Files workspace need SSH.")
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textTertiary)
-                        .fixedSize(horizontal: false, vertical: true)
+                Group {
+                    if transport == .ssh {
+                        SheetSectionLabel("SSH TARGET")
+                        TextField("vincent@10.10.10.87", text: $target)
+                            .textFieldStyle(.roundedBorder)
+                        Text("user@host, a ~/.ssh/config alias, or user@host:port for a custom port.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Theme.textTertiary)
+                    } else {
+                        SheetSectionLabel("TAILCAT TOKEN")
+                        TextField("tcpGFwWCD…", text: $token)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                        Text("On the remote Mac: `herdr plugin install lbr77/herdr-plugin-tailcat`, then `herdr plugin action invoke herdr.tailcat.token` and paste the token here. The WireGuard tunnel is built in — no external tool. The token is stored in the Keychain. Standalone shells and the Files workspace need SSH.")
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .frame(alignment: .topLeading)
             }
             .padding(16)
 
@@ -817,7 +863,7 @@ struct AddDeviceSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
     }
 }
@@ -868,7 +914,7 @@ struct SSHAuthenticationSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
         .onAppear { passwordFocused = true }
     }
@@ -894,6 +940,9 @@ struct SheetHeader: View {
                 Text(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(alignment: .topLeading)
             }
             Spacer()
         }
@@ -907,6 +956,21 @@ private enum SheetCardMetrics {
     static let cornerRadius: CGFloat = 10
     static let iconSize: CGFloat = 18
     static let gridSpacing: CGFloat = 8
+}
+
+/// Stable sheet widths — prefer min/ideal/max equal so AppKit doesn't reflow on click.
+private enum SheetLayout {
+    static let narrow: CGFloat = 400
+    static let search: CGFloat = 440
+    static let medium: CGFloat = 540
+    static let wide: CGFloat = 580
+    static let directoryBrowserHeight: CGFloat = 220
+}
+
+private extension View {
+    func sheetFixedWidth(_ width: CGFloat) -> some View {
+        frame(minWidth: width, idealWidth: width, maxWidth: width)
+    }
 }
 
 struct SheetSectionLabel: View {
@@ -982,13 +1046,26 @@ struct SheetChoiceCard: View {
     }
 }
 
+struct NewSpaceListing: Identifiable {
+    let device: Device
+    let entries: [String]
+    var id: UUID { device.id }
+}
+
 struct NewSpaceSheet: View {
     @ObservedObject var model: AppModel
+    let listing: NewSpaceListing
     @Environment(\.dismiss) private var dismiss
-    @State private var deviceID = Device.local.id
+    @State private var deviceID: UUID
     // The trailing slash keeps typing in filter position from the first keystroke.
     @State private var directory = "~/"
     @State private var label = ""
+
+    init(model: AppModel, listing: NewSpaceListing) {
+        self.model = model
+        self.listing = listing
+        _deviceID = State(initialValue: listing.device.id)
+    }
 
     private var chosenDevice: Device {
         model.device(deviceID) ?? .local
@@ -997,48 +1074,53 @@ struct NewSpaceSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SheetHeader(
-                systemImage: "folder.badge.plus",
+                systemImage: "plus",
                 title: String(localized: "New Space"),
-                subtitle: String(localized: "A herdr workspace rooted at a project directory on \(chosenDevice.name)")
+                subtitle: String(localized: "New space on \(chosenDevice.name)")
             )
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
-            VStack(alignment: .leading, spacing: 12) {
-                if model.showsDeviceBadges {
-                    SheetSectionLabel("DEVICE")
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                        spacing: SheetCardMetrics.gridSpacing
-                    ) {
-                        ForEach(model.devices) { device in
-                            SheetChoiceCard(
-                                title: device.name,
-                                systemImage: device.isLocal ? "laptopcomputer" : "desktopcomputer",
-                                selected: deviceID == device.id
-                            ) {
-                                deviceID = device.id
+            // Scroll the form; keep footer pinned so Cancel / New Space never clip.
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if model.showsDeviceBadges {
+                        SheetSectionLabel("DEVICE")
+                        LazyVGrid(
+                            columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                            spacing: SheetCardMetrics.gridSpacing
+                        ) {
+                            ForEach(model.devices) { device in
+                                SheetChoiceCard(
+                                    title: device.name,
+                                    systemImage: device.isLocal ? "laptopcomputer" : "desktopcomputer",
+                                    selected: deviceID == device.id
+                                ) {
+                                    deviceID = device.id
+                                }
                             }
                         }
+
+                        Spacer().frame(height: 12)
                     }
 
+                    SheetSectionLabel("DIRECTORY")
+                    DirectoryPickerField(
+                        model: model,
+                        device: chosenDevice,
+                        path: $directory,
+                        initialEntries: chosenDevice.id == listing.device.id ? listing.entries : nil
+                    )
+
                     Spacer().frame(height: 12)
+
+                    SheetSectionLabel("NAME")
+                    TextField("Defaults to the folder name", text: $label)
+                        .textFieldStyle(.roundedBorder)
                 }
-
-                SheetSectionLabel("DIRECTORY")
-                DirectoryPickerField(model: model, device: chosenDevice, path: $directory)
-                if !chosenDevice.isLocal {
-                    Text(String(localized: "Path on \(chosenDevice.name); ~ expands to its home directory"))
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-
-                Spacer().frame(height: 12)
-
-                SheetSectionLabel("NAME")
-                TextField("Defaults to the folder name", text: $label)
-                    .textFieldStyle(.roundedBorder)
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(16)
+            .frame(maxHeight: 480)
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
@@ -1047,7 +1129,7 @@ struct NewSpaceSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .focusEffectDisabled()
-                Button("Create Space") {
+                Button("New Space") {
                     model.createNewSpace(device: chosenDevice, directory: directory, label: label)
                     dismiss()
                 }
@@ -1060,11 +1142,8 @@ struct NewSpaceSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 540)
+        .sheetFixedWidth(SheetLayout.medium)
         .herdrmHideFocusRing()
-        .onAppear {
-            deviceID = model.deviceFilter ?? model.devices.first?.id ?? Device.local.id
-        }
     }
 }
 
@@ -1091,6 +1170,15 @@ struct DirectoryPickerField: View {
     @State private var filter = ""
     @State private var isListing = false
     @State private var hoveredEntry: String?
+
+    init(model: AppModel, device: Device, path: Binding<String>, initialEntries: [String]? = nil) {
+        self.model = model
+        self.device = device
+        _path = path
+        _listedRoot = State(initialValue: initialEntries == nil ? "" : "~")
+        _listedDeviceID = State(initialValue: initialEntries == nil ? nil : device.id)
+        _entries = State(initialValue: initialEntries ?? [])
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1178,7 +1266,7 @@ struct DirectoryPickerField: View {
             }
             .padding(4)
         }
-        .frame(height: 150)
+        .frame(height: SheetLayout.directoryBrowserHeight)
         .background(RoundedRectangle(cornerRadius: 7).fill(Theme.contentBackground))
         .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Theme.hairline, lineWidth: 1))
         .overlay(alignment: .topTrailing) {
@@ -1259,386 +1347,6 @@ struct DirectoryPickerField: View {
     }
 }
 
-struct NewTerminalSheet: View {
-    @ObservedObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var deviceID = Device.local.id
-    @State private var workspaceID = ""
-
-    private var chosenDevice: Device {
-        model.device(deviceID) ?? .local
-    }
-
-    private var spaces: [WorkspaceInfo] {
-        model.session(deviceID).workspaces
-    }
-
-    private var isStandalone: Bool { workspaceID.isEmpty }
-
-    private var spaceLabel: String {
-        spaces.first { $0.workspaceID == workspaceID }?.label ?? String(localized: "a Herdr space")
-    }
-
-    private var subtitle: String {
-        if isStandalone {
-            return chosenDevice.isLocal
-                ? String(localized: "Start a login shell on this Mac")
-                : String(localized: "Connect to \(chosenDevice.name) over SSH")
-        }
-        return String(localized: "Creates a persistent shell in \(spaceLabel) on \(chosenDevice.name)")
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SheetHeader(
-                systemImage: "terminal",
-                title: String(localized: "New Terminal"),
-                subtitle: subtitle
-            )
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-
-            VStack(alignment: .leading, spacing: 12) {
-                if model.showsDeviceBadges {
-                    SheetSectionLabel("DEVICE")
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                        spacing: SheetCardMetrics.gridSpacing
-                    ) {
-                        ForEach(model.devices) { device in
-                            SheetChoiceCard(
-                                title: device.name,
-                                systemImage: device.isLocal ? "laptopcomputer" : "desktopcomputer",
-                                selected: deviceID == device.id
-                            ) {
-                                deviceID = device.id
-                                workspaceID = model.session(device.id).workspaces.first?.workspaceID ?? ""
-                            }
-                        }
-                    }
-
-                    Spacer().frame(height: 12)
-                }
-
-                SheetSectionLabel("SPACE")
-                // A herdr space gives a persistent, reattachable server-owned
-                // shell; Standalone is an app-owned process (plain login shell
-                // or ssh) that needs no herdr on the device at all.
-                ScrollView {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                        spacing: SheetCardMetrics.gridSpacing
-                    ) {
-                        ForEach(spaces) { workspace in
-                            SheetChoiceCard(
-                                title: workspace.label,
-                                systemImage: "square.stack.3d.up",
-                                selected: workspaceID == workspace.workspaceID
-                            ) {
-                                workspaceID = workspace.workspaceID
-                            }
-                        }
-                        SheetChoiceCard(
-                            title: String(localized: "Standalone (not in a space)"),
-                            systemImage: "terminal",
-                            selected: isStandalone
-                        ) {
-                            workspaceID = ""
-                        }
-                    }
-                    .padding(1)
-                }
-                .frame(maxHeight: 280)
-                if isStandalone {
-                    Text("Runs in this app only; closing Goose Agent ends the shell.")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.textTertiary)
-                }
-            }
-            .padding(16)
-
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .focusEffectDisabled()
-                Button("Open Terminal") {
-                    if isStandalone {
-                        model.newShellSession(on: chosenDevice)
-                    } else {
-                        model.startNewTerminal(device: chosenDevice, workspaceID: workspaceID)
-                    }
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
-                .keyboardShortcut(.defaultAction)
-                .focusEffectDisabled()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .frame(width: 540)
-        .herdrmHideFocusRing()
-        .onAppear {
-            deviceID = model.selectedSpace?.deviceID
-                ?? model.selectedAttachedEntry?.device.id
-                ?? model.deviceFilter
-                ?? model.devices.first?.id
-                ?? Device.local.id
-            let preferredSpace = model.selectedSpace?.deviceID == deviceID
-                ? model.selectedSpace?.workspaceID
-                : model.selectedAttachedEntry.flatMap {
-                    $0.device.id == deviceID ? $0.workspaceID : nil
-                }
-            workspaceID = preferredSpace.flatMap { preferred in
-                spaces.contains { $0.workspaceID == preferred } ? preferred : nil
-            } ?? spaces.first?.workspaceID ?? ""
-        }
-    }
-}
-
-struct NewAgentSheet: View {
-    @ObservedObject var model: AppModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var deviceID = Device.local.id
-    @State private var kind = ""
-    @State private var workspaceID: String = ""
-    @AppStorage("agent.bypassDefault") private var bypass = true
-
-    private var chosenDevice: Device {
-        model.device(deviceID) ?? .local
-    }
-
-    private var session: DeviceSessionState {
-        model.session(deviceID)
-    }
-
-    private var kinds: [String] {
-        session.agentCatalog.kinds.filter { AgentKindVisibility.isEnabled($0) }
-    }
-
-    private var bypassFlags: [String]? {
-        HerdrService.bypassFlags(for: kind)
-    }
-
-    private var spaceLabel: String {
-        if workspaceID.isEmpty { return String(localized: "the focused space") }
-        return session.workspaces.first { $0.workspaceID == workspaceID }?.label ?? workspaceID
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SheetHeader(
-                systemImage: "sparkles",
-                title: String(localized: "New Agent"),
-                subtitle: String(localized: "Starts in \(spaceLabel), attached to its live terminal")
-            )
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-
-            VStack(alignment: .leading, spacing: 12) {
-                if model.showsDeviceBadges {
-                    SheetSectionLabel("DEVICE")
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                        spacing: SheetCardMetrics.gridSpacing
-                    ) {
-                        ForEach(model.devices) { device in
-                            SheetChoiceCard(
-                                title: device.name,
-                                systemImage: device.isLocal ? "laptopcomputer" : "desktopcomputer",
-                                selected: deviceID == device.id
-                            ) {
-                                deviceID = device.id
-                                workspaceID = ""
-                                let availableKinds = model.session(device.id).agentCatalog.kinds
-                                if !availableKinds.contains(kind) { kind = availableKinds.first ?? "" }
-                            }
-                        }
-                    }
-
-                    Spacer().frame(height: 12)
-                }
-
-                SheetSectionLabel("AGENT")
-                Group {
-                    switch session.agentCatalog {
-                    case .loading:
-                        HStack(spacing: 8) {
-                            ProgressView().controlSize(.small)
-                            Text(String(localized: "Checking agents on \(chosenDevice.name)…"))
-                                .foregroundStyle(Theme.textSecondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-                    case .failed(let message):
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(chosenDevice.isLocal
-                                ? String(localized: "Couldn’t check installed agent CLIs.")
-                                : String(localized: "Couldn’t load this server’s agent catalog."))
-                                .foregroundStyle(Theme.textSecondary)
-                            Text(message)
-                                .font(.system(size: 10.5))
-                                .foregroundStyle(Theme.textTertiary)
-                                .lineLimit(2)
-                            Button("Retry") { model.reloadAgentCatalog(deviceID: deviceID) }
-                                .controlSize(.small)
-                                .focusEffectDisabled()
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-                    case .loaded(let loadedKinds, _) where loadedKinds.isEmpty:
-                        Text(chosenDevice.isLocal
-                            ? String(localized: "No supported agent CLI was found on this Mac. Install one, or set a binary path in Settings → Agents.")
-                            : String(localized: "This server advertises no agent manifests."))
-                            .foregroundStyle(Theme.textSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
-                    case .loaded(let loadedKinds, let paths):
-                        ScrollView {
-                            LazyVGrid(
-                                columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                                spacing: SheetCardMetrics.gridSpacing
-                            ) {
-                                ForEach(loadedKinds.filter { AgentKindVisibility.isEnabled($0) }, id: \.self) { name in
-                                    kindCell(name, path: paths[name])
-                                }
-                            }
-                            .padding(1)
-                        }
-                        .frame(maxHeight: 400)
-                    }
-                }
-
-                Spacer().frame(height: 12)
-
-                SheetSectionLabel("SPACE")
-                ScrollView {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                        spacing: SheetCardMetrics.gridSpacing
-                    ) {
-                        SheetChoiceCard(
-                            title: String(localized: "Focused space"),
-                            systemImage: "scope",
-                            selected: workspaceID.isEmpty
-                        ) {
-                            workspaceID = ""
-                        }
-                        ForEach(session.workspaces) { workspace in
-                            SheetChoiceCard(
-                                title: workspace.label,
-                                systemImage: "square.stack.3d.up",
-                                selected: workspaceID == workspace.workspaceID
-                            ) {
-                                workspaceID = workspace.workspaceID
-                            }
-                        }
-                    }
-                    .padding(1)
-                }
-                .frame(maxHeight: 280)
-
-                // shown only for agents with a verified bypass flag
-                if let flags = bypassFlags {
-                    Spacer().frame(height: 12)
-
-                    SheetSectionLabel("OPTIONS")
-                    Toggle(isOn: $bypass) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text("Bypass permissions")
-                                .font(.system(size: 12.5))
-                                .foregroundStyle(Theme.text)
-                            Text(flags.joined(separator: " "))
-                                .font(.system(size: 10.5).monospaced())
-                                .foregroundStyle(Theme.textTertiary)
-                        }
-                    }
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                }
-            }
-            .padding(16)
-
-            Rectangle().fill(Theme.hairline).frame(height: 1)
-
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                    .focusEffectDisabled()
-                Button("Start Agent") {
-                    model.startNewAgent(
-                        device: chosenDevice,
-                        kind: kind,
-                        workspaceID: workspaceID.isEmpty ? nil : workspaceID,
-                        bypass: bypass && bypassFlags != nil
-                    )
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.accent)
-                .keyboardShortcut(.defaultAction)
-                .focusEffectDisabled()
-                .disabled(!kinds.contains(kind))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-        }
-        .frame(width: 580)
-        .herdrmHideFocusRing()
-        .onAppear {
-            deviceID = model.selectedSpace?.deviceID
-                ?? model.deviceFilter
-                ?? model.devices.first?.id
-                ?? Device.local.id
-            workspaceID = model.selectedSpace?.deviceID == deviceID
-                ? (model.selectedSpace?.workspaceID ?? "")
-                : ""
-            if !kinds.contains(kind) { kind = kinds.first ?? "" }
-        }
-        .onChange(of: kinds) { _, newKinds in
-            if !newKinds.contains(kind) { kind = newKinds.first ?? "" }
-        }
-    }
-
-    private func kindCell(_ name: String, path: String?) -> some View {
-        let selected = kind == name
-        return Button {
-            kind = name
-        } label: {
-            VStack(spacing: 7) {
-                Group {
-                    if let resource = BrandIconLoader.agentIcon(for: name) {
-                        BrandIcon(resource: resource, size: SheetCardMetrics.iconSize)
-                    } else {
-                        Image(systemName: "terminal")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                }
-                .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
-                .frame(width: SheetCardMetrics.iconSize, height: SheetCardMetrics.iconSize)
-                Text(name)
-                    .font(.system(size: 11.5, weight: selected ? .medium : .regular))
-                    .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
-                    .lineLimit(1)
-            }
-            .help(path ?? "")
-            .frame(maxWidth: .infinity)
-            .frame(height: SheetCardMetrics.height)
-            .background(
-                RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius)
-                    .fill(selected ? AnyShapeStyle(Theme.accentWash) : AnyShapeStyle(Theme.itemWash))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius)
-                    .strokeBorder(selected ? Theme.accent : .clear, lineWidth: 1.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius))
-        }
-        .buttonStyle(.plain)
-        .herdrmHideFocusRing()
-    }
-}
-
 struct RenameSpaceSheet: View {
     @ObservedObject var model: AppModel
     let entry: AppModel.SpaceEntry
@@ -1685,7 +1393,7 @@ struct RenameSpaceSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
         .onAppear { name = entry.workspace.label }
     }
@@ -1740,7 +1448,7 @@ struct RenameAgentSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
         .onAppear { name = entry.title }
     }
@@ -1795,7 +1503,7 @@ struct RenameTerminalSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
         .onAppear { name = entry.title }
     }
@@ -1854,7 +1562,7 @@ struct EditDeviceSheet: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
         }
-        .frame(width: 400)
+        .sheetFixedWidth(SheetLayout.narrow)
         .herdrmHideFocusRing()
         .onAppear {
             name = device.name

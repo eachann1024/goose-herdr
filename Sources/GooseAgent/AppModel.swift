@@ -28,7 +28,7 @@ enum AgentCatalogState: Equatable {
 }
 
 /// Global pane identity: pane ids like "w1:p1" collide across devices.
-struct PaneRef: Hashable {
+struct PaneRef: Hashable, Codable {
     let deviceID: UUID
     let paneID: String
 }
@@ -36,6 +36,60 @@ struct PaneRef: Hashable {
 struct SpaceRef: Hashable {
     let deviceID: UUID
     let workspaceID: String
+}
+
+/// A space herdr dropped after its last tab closed. The app keeps it until the
+/// user right-clicks Close; clicking the gray name recreates a terminal.
+struct RetainedSpace: Codable, Equatable, Identifiable {
+    var deviceID: UUID
+    var workspaceID: String
+    var label: String
+    var cwd: String?
+    var sortIndex: Int
+
+    var id: String { "\(deviceID.uuidString)-\(workspaceID)" }
+    var ref: SpaceRef { SpaceRef(deviceID: deviceID, workspaceID: workspaceID) }
+
+    var workspaceInfo: WorkspaceInfo {
+        WorkspaceInfo(
+            workspaceID: workspaceID,
+            number: sortIndex,
+            label: label,
+            focused: false,
+            paneCount: 0,
+            tabCount: 0,
+            cwd: cwd
+        )
+    }
+}
+
+enum RetainedSpaceStore {
+    static let defaultsKey = "spaces.retained"
+
+    static func load(defaults: UserDefaults = .standard) -> [RetainedSpace] {
+        guard let data = defaults.data(forKey: defaultsKey),
+              let spaces = try? JSONDecoder().decode([RetainedSpace].self, from: data)
+        else { return [] }
+        return spaces
+    }
+
+    static func save(_ spaces: [RetainedSpace], defaults: UserDefaults = .standard) {
+        if spaces.isEmpty {
+            defaults.removeObject(forKey: defaultsKey)
+        } else if let data = try? JSONEncoder().encode(spaces) {
+            defaults.set(data, forKey: defaultsKey)
+        }
+    }
+
+    static func merging(_ live: [WorkspaceInfo], with retained: [RetainedSpace]) -> [WorkspaceInfo] {
+        let liveIDs = Set(live.map(\.workspaceID))
+        var result = live
+        for space in retained.sorted(by: { $0.sortIndex < $1.sortIndex })
+        where !liveIDs.contains(space.workspaceID) {
+            result.insert(space.workspaceInfo, at: min(max(space.sortIndex, 0), result.count))
+        }
+        return result
+    }
 }
 
 /// Live state for one device's herdr session.
@@ -114,17 +168,34 @@ final class AppModel: ObservableObject {
     }
     private static let deviceFilterKey = "device.filter"
     @Published var sessions: [UUID: DeviceSessionState] = [:]
-    @Published var selectedSpace: SpaceRef?
+    @Published var selectedSpace: SpaceRef? {
+        didSet {
+            // Async creation/refresh cannot restore a filter with no visible control.
+            if selectedSpace != nil,
+               UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) {
+                selectedSpace = nil
+            }
+        }
+    }
     @Published var selectedPane: PaneRef? {
         didSet {
-            // Leaving a finished agent marks it viewed. Staying on it while
-            // the turn ends must not swallow the unread flag.
+            // Opening (or reselecting) a finished agent marks it viewed.
+            // Also acknowledge a completion seen before leaving the current pane.
             if let old = oldValue, old != selectedPane {
                 unreadAgents.remove(AgentUnreadKey(deviceID: old.deviceID, paneID: old.paneID))
+            }
+            if let selectedPane {
+                unreadAgents.remove(AgentUnreadKey(deviceID: selectedPane.deviceID, paneID: selectedPane.paneID))
+            }
+            if let selectedPane, let data = try? JSONEncoder().encode(selectedPane) {
+                UserDefaults.standard.set(data, forKey: Self.selectedPaneKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.selectedPaneKey)
             }
             noteSelectedAttachSession()
         }
     }
+    private static let selectedPaneKey = "session.selectedPane"
 
     /// Kept-alive attaches: every agent/terminal the user has opened stays
     /// mounted (hidden) so switching back preserves its scrollback and running
@@ -145,8 +216,6 @@ final class AppModel: ObservableObject {
     @Published private(set) var unreadAgents: Set<AgentUnreadKey> = []
 
     @Published var showAddDevice = false
-    @Published var showNewAgent = false
-    @Published var showNewTerminal = false
     @Published var showNewSpace = false
     @Published var showSearch = false
     @Published var isFileManagerActive = false
@@ -196,8 +265,12 @@ final class AppModel: ObservableObject {
         let perform: () -> Void
     }
     @Published var closeRequest: CloseRequest?
+    @Published private(set) var retainedSpaces: [RetainedSpace] = RetainedSpaceStore.load()
 
     private let store = DeviceStore()
+    private var dismissedSpaceKeys: Set<String> = []
+    private var spaceReviveTask: Task<Void, Never>?
+    private var revivingSpaces: Set<SpaceRef> = []
     private var services: [UUID: HerdrService] = [:]
     private var sessionTasks: [UUID: Task<Void, Never>] = [:]
     private var refreshDebounces: [UUID: Task<Void, Never>] = [:]
@@ -212,6 +285,10 @@ final class AppModel: ObservableObject {
     init() {
         let loaded = DeviceStore().load()
         devices = loaded
+        // Reserve the selection before parallel device snapshots can pick a default.
+        if let data = UserDefaults.standard.data(forKey: Self.selectedPaneKey) {
+            selectedPane = try? JSONDecoder().decode(PaneRef.self, from: data)
+        }
         // Restore the device filter only if that device still exists;
         // otherwise fall back to All Devices.
         if let raw = UserDefaults.standard.string(forKey: Self.deviceFilterKey),
@@ -316,12 +393,8 @@ final class AppModel: ObservableObject {
         case agent(AgentEntry)
         case terminal(TerminalEntry)
 
-        var id: String {
-            switch self {
-            case .agent(let entry): return "agent-\(entry.id)"
-            case .terminal(let entry): return "terminal-\(entry.id)"
-            }
-        }
+        // Starting/exiting an agent changes the pane's kind, not its live attach.
+        var id: String { "\(ref.deviceID.uuidString)-\(ref.paneID)" }
 
         var device: Device {
             switch self {
@@ -335,6 +408,18 @@ final class AppModel: ObservableObject {
             case .agent(let entry): return entry.ref
             case .terminal(let entry): return entry.ref
             }
+        }
+
+        var title: String {
+            switch self {
+            case .agent(let entry): return entry.title
+            case .terminal(let entry): return entry.title
+            }
+        }
+
+        var isAgent: Bool {
+            if case .agent = self { return true }
+            return false
         }
 
         var workspaceID: String {
@@ -442,19 +527,6 @@ final class AppModel: ObservableObject {
         })
     }
 
-    var scopeAttention: SpaceAttention {
-        SpaceAttention.rollup(devicesInScope.flatMap { device in
-            session(device.id).agents.map {
-                (
-                    status: $0.status,
-                    unreadDone: unreadAgents.contains(
-                        AgentUnreadKey(deviceID: device.id, paneID: $0.paneID)
-                    )
-                )
-            }
-        })
-    }
-
     private func workspaceRank(deviceID: UUID, workspaceID: String) -> Int {
         session(deviceID).workspaces.firstIndex { $0.workspaceID == workspaceID } ?? Int.max
     }
@@ -500,6 +572,46 @@ final class AppModel: ObservableObject {
         session(entry.device.id).agents.filter { $0.workspaceID == entry.workspace.workspaceID }.count
     }
 
+    func isRetainedSpace(_ ref: SpaceRef) -> Bool {
+        retainedSpaces.contains { $0.deviceID == ref.deviceID && $0.workspaceID == ref.workspaceID }
+    }
+
+    func isEmptySpace(_ entry: SpaceEntry) -> Bool {
+        isRetainedSpace(entry.ref)
+    }
+
+    /// Click a live space to filter it; click a gray empty space to recreate its terminal.
+    func activateSpace(_ ref: SpaceRef) {
+        if isRetainedSpace(ref) {
+            reviveRetainedSpace(ref)
+        } else {
+            selectSpace(ref)
+        }
+    }
+
+    /// Best-effort root path for a space: workspace.cwd, else any pane/agent cwd in it.
+    func spacePath(for entry: SpaceEntry) -> String? {
+        if let cwd = entry.workspace.cwd?.trimmingCharacters(in: .whitespacesAndNewlines), !cwd.isEmpty {
+            return cwd
+        }
+        let state = session(entry.device.id)
+        let wid = entry.workspace.workspaceID
+        if let cwd = state.agents.first(where: { $0.workspaceID == wid })?.cwd,
+           let trimmed = optionalNonEmpty(cwd) {
+            return trimmed
+        }
+        if let cwd = state.panes.first(where: { $0.workspaceID == wid })?.cwd,
+           let trimmed = optionalNonEmpty(cwd) {
+            return trimmed
+        }
+        return nil
+    }
+
+    private func optionalNonEmpty(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     func spaceName(deviceID: UUID, workspaceID: String) -> String {
         session(deviceID).workspaces.first { $0.workspaceID == workspaceID }?.label ?? workspaceID
     }
@@ -511,7 +623,7 @@ final class AppModel: ObservableObject {
 
     /// Badges on sidebar/titlebar rows are scoped by the device filter: with a
     /// single device selected every row belongs to it, so the badge says
-    /// nothing. ⌘K search and the New Agent/Space device pickers stay on
+    /// nothing. ⌘K search and the New Space device picker stay on
     /// `showsDeviceBadges` — search crosses all devices regardless of the
     /// filter, and the pickers must stay reachable while filtered.
     var showsRowDeviceBadges: Bool {
@@ -521,6 +633,7 @@ final class AppModel: ObservableObject {
     // MARK: - Selection
 
     func selectSpace(_ ref: SpaceRef?) {
+        let ref = UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) ? nil : ref
         isFileManagerActive = false
         selectedSpace = ref
         selectedShellID = nil
@@ -541,6 +654,18 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Hiding Spaces removes only the filter, not the active terminal or Files view.
+    func synchronizeSpaceVisibility() {
+        if UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) {
+            selectedSpace = nil
+        }
+    }
+
+    /// A new terminal/agent must never land on a device the sidebar has filtered out.
+    private func isFilteredOut(_ deviceID: UUID) -> Bool {
+        deviceFilter.map { $0 != deviceID } ?? false
+    }
+
     /// When jumping into a space, land on whoever still needs a look — not
     /// merely the first tab.
     private func preferredVisibleAgent() -> AgentEntry? {
@@ -554,12 +679,19 @@ final class AppModel: ObservableObject {
     }
 
     /// Jump target used by the search sheet and by notification clicks.
-    func reveal(_ ref: PaneRef) {
+    func reveal(_ ref: PaneRef, preservingSpaceScope: Bool = false) {
         isFileManagerActive = false
         if let filter = deviceFilter, filter != ref.deviceID {
             deviceFilter = nil
         }
-        selectedSpace = nil
+        if preservingSpaceScope, selectedSpace != nil {
+            let state = session(ref.deviceID)
+            let workspaceID = state.panes.first { $0.paneID == ref.paneID }?.workspaceID
+                ?? state.agents.first { $0.paneID == ref.paneID }?.workspaceID
+            selectedSpace = workspaceID.map { SpaceRef(deviceID: ref.deviceID, workspaceID: $0) }
+        } else {
+            selectedSpace = nil
+        }
         selectedPane = ref
         selectedShellID = nil
         // Only the search sheet needs the deferred request: its dismissal restores the
@@ -581,6 +713,23 @@ final class AppModel: ObservableObject {
         selectedShellID = nil
     }
 
+    /// Sidebar Files is a mode toggle: open when idle, leave when already active.
+    func toggleFileManager() {
+        if isFileManagerActive {
+            isFileManagerActive = false
+        } else {
+            openFileManager()
+        }
+    }
+
+    func toggleSearch() {
+        showSearch.toggle()
+    }
+
+    func toggleNewSpace() {
+        showNewSpace.toggle()
+    }
+
     func selectAgent(_ ref: PaneRef) {
         isFileManagerActive = false
         selectedPane = ref
@@ -591,7 +740,7 @@ final class AppModel: ObservableObject {
         selectedShellID.flatMap { id in shellSessions.first { $0.id == id } }
     }
 
-    /// Every click opens another terminal, like New Agent opens another agent.
+    /// Every click opens another terminal.
     func newShellSession(on device: Device) {
         let n = shellSessions.count + 1
         let session = ShellSession(
@@ -607,6 +756,39 @@ final class AppModel: ObservableObject {
         isFileManagerActive = false
         selectedShellID = id
         ShellViewRegistry.focus(id)
+    }
+
+    /// Sidebar order for ⌘1…9: Agents → remote Terminals → local shell sessions,
+    /// already filtered by the selected space (when any).
+    enum SwitchableSession: Equatable {
+        case agent(PaneRef)
+        case shell(UUID)
+    }
+
+    var switchableSessions: [SwitchableSession] {
+        var items: [SwitchableSession] = visibleAgents.map { .agent($0.ref) }
+        items += visibleTerminals.map { .agent($0.ref) }
+        items += shellSessions.map { .shell($0.id) }
+        return items
+    }
+
+    /// `number` is 1…9. ⌘9 jumps to the last item (browser-style); ⌘1…8 are fixed slots.
+    func selectSwitchableSession(number: Int) {
+        let items = switchableSessions
+        guard !items.isEmpty, (1...9).contains(number) else { return }
+        let index: Int
+        if number == 9 {
+            index = items.count - 1
+        } else {
+            guard number - 1 < items.count else { return }
+            index = number - 1
+        }
+        switch items[index] {
+        case .agent(let ref):
+            selectAgent(ref)
+        case .shell(let id):
+            selectShell(id)
+        }
     }
 
     func closeShellSession(_ id: UUID) {
@@ -633,6 +815,10 @@ final class AppModel: ObservableObject {
         }
         // Surface any herdr named sessions running now (issue #81).
         refreshNamedSessions()
+        // Named-session devices are only available after discovery.
+        if let selectedPane, device(selectedPane.deviceID) == nil {
+            self.selectedPane = nil
+        }
     }
 
     func service(for device: Device) -> HerdrService {
@@ -674,6 +860,7 @@ final class AppModel: ObservableObject {
             if selectedPane?.deviceID == device.id {
                 selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
             }
+            removeRetainedSpaces(deviceID: device.id)
         }
     }
 
@@ -681,7 +868,14 @@ final class AppModel: ObservableObject {
     /// with exponential backoff (1s → 30s) whenever the connection drops.
     private func startSession(_ device: Device) {
         sessionTasks[device.id]?.cancel()
-        if sessions[device.id] == nil { sessions[device.id] = DeviceSessionState() }
+        if sessions[device.id] == nil {
+            sessions[device.id] = DeviceSessionState(
+                workspaces: RetainedSpaceStore.merging(
+                    [],
+                    with: retainedSpaces.filter { $0.deviceID == device.id }
+                )
+            )
+        }
         let service = service(for: device)
         sessionTasks[device.id] = Task { [weak self] in
             var backoff: Double = 1
@@ -770,7 +964,13 @@ final class AppModel: ObservableObject {
     /// catalog; `agent.start` validates in the target pane instead. Manifests
     /// also feed the attachment-capability registry (paste path vs upload).
     private func loadAgentCatalog(deviceID: UUID, using service: HerdrService) async {
-        sessions[deviceID]?.agentCatalog = .loading
+        // Keep the last loaded catalog visible while refreshing so Settings/New Agent
+        // don't collapse to a single row (or empty) during the round-trip.
+        if case .loaded = sessions[deviceID]?.agentCatalog {
+            // leave as-is
+        } else {
+            sessions[deviceID]?.agentCatalog = .loading
+        }
         do {
             let manifests = try await service.agentManifests()
             sessions[deviceID]?.attachmentCapabilities =
@@ -931,6 +1131,7 @@ final class AppModel: ObservableObject {
         if selectedPane?.deviceID == device.id {
             selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
         }
+        removeRetainedSpaces(deviceID: device.id)
     }
 
     // MARK: - Refresh
@@ -960,19 +1161,20 @@ final class AppModel: ObservableObject {
     }
 
     private func performRefresh(_ deviceID: UUID) async -> Bool {
-        guard let device = device(deviceID), let service = services[deviceID] else {
+        guard let device = device(deviceID), let service = services[deviceID],
+              !revivingSpaces.contains(where: { $0.deviceID == deviceID }) else {
             return false
         }
         let statusGeneration = statusGenerations[deviceID, default: 0]
         do {
             let snapshot = try await service.snapshot()
-            guard services[deviceID] === service, sessions[deviceID] != nil else {
+            guard services[deviceID] === service, sessions[deviceID] != nil,
+                  !revivingSpaces.contains(where: { $0.deviceID == deviceID }) else {
                 return false
             }
             guard statusGenerations[deviceID, default: 0] == statusGeneration else {
-                // A direct status event overtook this request on the separate
-                // event connection. Discard the older snapshot and let the
-                // refresh drain fetch one after that event.
+                // A status event or workspace restoration overtook this request.
+                // Discard the older snapshot and fetch the completed state.
                 refreshRequested.insert(deviceID)
                 return true
             }
@@ -992,8 +1194,26 @@ final class AppModel: ObservableObject {
             previousStatuses[deviceID] = Dictionary(
                 uniqueKeysWithValues: snapshot.agents.map { ($0.paneID, $0.status) }
             )
+            let previousPaneOrder = visibleAgents.map(\.ref) + visibleTerminals.map(\.ref)
+            let previousWorkspaces = sessions[deviceID]?.workspaces ?? []
+            let liveIDs = Set(snapshot.workspaces.map(\.workspaceID))
+            retainDisappearedSpaces(
+                deviceID: deviceID,
+                previous: previousWorkspaces,
+                liveIDs: liveIDs,
+                paneCWD: (sessions[deviceID]?.panes ?? []).reduce(into: [String: String]()) { result, pane in
+                    if result[pane.workspaceID] == nil, let cwd = optionalNonEmpty(pane.cwd ?? "") {
+                        result[pane.workspaceID] = cwd
+                    }
+                }
+            )
+            pruneRetainedSpaces(deviceID: deviceID, liveIDs: liveIDs)
+            let mergedWorkspaces = RetainedSpaceStore.merging(
+                snapshot.workspaces,
+                with: retainedSpaces.filter { $0.deviceID == deviceID }
+            )
             sessions[deviceID]?.agents = snapshot.agents
-            sessions[deviceID]?.workspaces = snapshot.workspaces
+            sessions[deviceID]?.workspaces = mergedWorkspaces
             sessions[deviceID]?.tabs = TabReorder.ordered(
                 snapshot.tabs ?? [],
                 workspaces: snapshot.workspaces
@@ -1007,13 +1227,21 @@ final class AppModel: ObservableObject {
             attachSessions.removeAll { $0.device.id == deviceID && !paneIDs.contains($0.ref.paneID) }
             if let selected = selectedPane, selected.deviceID == deviceID,
                !paneIDs.contains(selected.paneID) {
-                selectedPane = nil
+                // Follow sidebar order, not the server's focus or agent activity priority.
+                let remaining = Set(visibleAgents.map(\.ref) + visibleTerminals.map(\.ref))
+                if let index = previousPaneOrder.firstIndex(of: selected) {
+                    let neighbors = Array(previousPaneOrder.dropFirst(index + 1))
+                        + previousPaneOrder.prefix(index).reversed()
+                    selectedPane = neighbors.first { remaining.contains($0) }
+                } else {
+                    selectedPane = nil
+                }
             }
             if let space = selectedSpace, space.deviceID == deviceID,
-               !snapshot.workspaces.contains(where: { $0.workspaceID == space.workspaceID }) {
+               !mergedWorkspaces.contains(where: { $0.workspaceID == space.workspaceID }) {
                 selectedSpace = nil
             }
-            if selectedPane == nil {
+            if selectedPane == nil, selectedSpace.map(isRetainedSpace) != true {
                 if let focusedPaneID = snapshot.focusedPaneID,
                    paneIDs.contains(focusedPaneID),
                    deviceFilter == nil || deviceFilter == deviceID {
@@ -1029,6 +1257,9 @@ final class AppModel: ObservableObject {
                     selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
                 }
             }
+            // A restored selection predates its snapshot, so its attach could not
+            // be registered by selectedPane.didSet yet.
+            noteSelectedAttachSession()
             return true
         } catch {
             // A snapshot is one request on an otherwise live session. The
@@ -1204,12 +1435,25 @@ final class AppModel: ObservableObject {
 
     // MARK: - Closing
 
+    private var paneCloseTask: Task<Void, Never>?
+    @Published private(set) var closingPanes: Set<PaneRef> = []
+
     func requestCloseSpace(_ entry: SpaceEntry) {
+        if isRetainedSpace(entry.ref) {
+            closeRequest = CloseRequest(
+                title: String(localized: "Close space \"\(entry.workspace.label)\" on \(entry.device.name)?"),
+                message: String(localized: "This empty space will be removed.")
+            ) { [weak self] in
+                self?.dismissRetainedSpace(entry.ref)
+            }
+            return
+        }
         closeRequest = CloseRequest(
             title: String(localized: "Close space \"\(entry.workspace.label)\" on \(entry.device.name)?"),
             message: String(localized: "All terminals and agents in this space will be closed.")
         ) { [weak self] in
             guard let self else { return }
+            self.markSpaceDismissed(entry.ref)
             Task {
                 do {
                     try await self.service(for: entry.device)
@@ -1223,21 +1467,65 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Close a pane. Idle/done agents and plain terminals close immediately;
+    /// working/blocked agents still ask for confirmation.
     func requestClosePane(_ ref: PaneRef, name: String) {
         guard let device = device(ref.deviceID) else { return }
-        closeRequest = CloseRequest(
-            title: String(localized: "Close \"\(name)\"?"),
-            message: String(localized: "The pane and whatever is running inside it will be terminated.")
-        ) { [weak self] in
-            guard let self else { return }
-            Task {
-                do {
-                    try await self.service(for: device).closePane(paneID: ref.paneID)
-                    if self.selectedPane == ref { self.selectedPane = nil }
-                    await self.refresh(device.id)
-                } catch {
-                    self.actionError = self.actionErrorMessage(error, device: device)
+        let agent = session(ref.deviceID).agents.first { $0.paneID == ref.paneID }
+        let needsConfirm: Bool = {
+            guard let agent else { return false }
+            switch agent.status {
+            case .working, .blocked:
+                return true
+            case .idle, .done, .unknown:
+                return false
+            }
+        }()
+
+        if needsConfirm {
+            closeRequest = CloseRequest(
+                title: String(localized: "Close \"\(name)\"?"),
+                message: String(localized: "This agent is still running and will be terminated.")
+            ) { [weak self] in
+                self?.performClosePane(ref, device: device)
+            }
+        } else {
+            performClosePane(ref, device: device)
+        }
+    }
+
+    private func performClosePane(_ ref: PaneRef, device: Device) {
+        let previous = paneCloseTask
+        paneCloseTask = Task {
+            // Serialize rapid closes so each decision uses the remaining live panes.
+            await previous?.value
+            closingPanes.insert(ref)
+            defer { closingPanes.remove(ref) }
+            do {
+                let service = service(for: device)
+                let snapshot = try await service.snapshot()
+                let workspaceID = snapshot.panes?.first { $0.paneID == ref.paneID }?.workspaceID
+                    ?? snapshot.agents.first { $0.paneID == ref.paneID }?.workspaceID
+                guard let workspaceID else { return }
+                let workspace = snapshot.workspaces.first { $0.workspaceID == workspaceID }
+                let sortIndex = session(device.id).workspaces.firstIndex { $0.workspaceID == workspaceID }
+                    ?? snapshot.workspaces.firstIndex { $0.workspaceID == workspaceID } ?? 0
+                let cwd = workspace?.cwd
+                    ?? snapshot.panes?.first { $0.paneID == ref.paneID }?.cwd
+                    ?? snapshot.agents.first { $0.paneID == ref.paneID }?.cwd
+                try await service.closePane(paneID: ref.paneID)
+                if workspace?.paneCount == 1 {
+                    rememberClosedSpace(
+                        deviceID: device.id,
+                        workspaceID: workspaceID,
+                        label: workspace?.label,
+                        cwd: cwd,
+                        sortIndex: sortIndex
+                    )
                 }
+                await refresh(device.id)
+            } catch {
+                actionError = actionErrorMessage(error, device: device)
             }
         }
     }
@@ -1247,6 +1535,10 @@ final class AppModel: ObservableObject {
     func renameSpace(_ entry: SpaceEntry, label: String) {
         let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !label.isEmpty, label != entry.workspace.label else { return }
+        if isRetainedSpace(entry.ref) {
+            renameRetainedSpace(entry.ref, label: label)
+            return
+        }
         Task {
             do {
                 try await service(for: entry.device).renameWorkspace(
@@ -1415,7 +1707,7 @@ final class AppModel: ObservableObject {
     }
 
     /// Creates a workspace rooted at the given directory ("~" expands to the device's
-    /// home, local or remote), then goes straight into the New Agent sheet for it.
+    /// home, local or remote), then selects the shell created with the workspace.
     func createNewSpace(device: Device, directory: String, label: String?) {
         Task {
             do {
@@ -1431,8 +1723,11 @@ final class AppModel: ObservableObject {
                     cwd: path
                 )
                 await refresh(device.id)
+                isFileManagerActive = false
                 selectedSpace = SpaceRef(deviceID: device.id, workspaceID: created.workspaceID)
-                showNewAgent = true
+                selectedPane = created.rootPaneID.map { PaneRef(deviceID: device.id, paneID: $0) }
+                    ?? firstVisiblePaneRef
+                selectedShellID = nil
             } catch {
                 actionError = actionErrorMessage(error, device: device)
             }
@@ -1442,7 +1737,52 @@ final class AppModel: ObservableObject {
     /// Creates a persistent shell tab on the selected Herdr device. Local and
     /// remote terminals use the same server-owned lifecycle and can be detached
     /// and reattached without killing the shell process.
+    /// Create a terminal in the current space (or a standalone shell if none).
+    func quickNewTerminal() {
+        if let shell = selectedShell, !isFilteredOut(shell.device.id) {
+            newShellSession(on: shell.device)
+            return
+        }
+        if let space = selectedSpace, !isFilteredOut(space.deviceID), let device = device(space.deviceID) {
+            startNewTerminal(device: device, workspaceID: space.workspaceID)
+            return
+        }
+        if let attached = selectedAttachedEntry, !isFilteredOut(attached.device.id) {
+            startNewTerminal(device: attached.device, workspaceID: attached.workspaceID)
+            return
+        }
+        let device = deviceFilter.flatMap { self.device($0) } ?? devices.first ?? .local
+        newShellSession(on: device)
+    }
+
+    /// Explicit per-kind commands start an agent without a picker.
+    func quickNewAgent(kind: String) {
+        let device: Device
+        let workspaceID: String?
+        if let space = selectedSpace, !isFilteredOut(space.deviceID), let d = self.device(space.deviceID) {
+            device = d
+            workspaceID = space.workspaceID
+        } else if let attached = selectedAttachedEntry, !isFilteredOut(attached.device.id) {
+            device = attached.device
+            workspaceID = attached.workspaceID
+        } else {
+            return
+        }
+        let bypass = UserDefaults.standard.object(forKey: "agent.bypassDefault") as? Bool ?? true
+        startNewAgent(
+            device: device,
+            kind: kind,
+            workspaceID: workspaceID,
+            bypass: bypass && (HerdrService.bypassFlags(for: kind) != nil)
+        )
+    }
+
     func startNewTerminal(device: Device, workspaceID: String) {
+        let ref = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
+        if isRetainedSpace(ref) {
+            reviveRetainedSpace(ref)
+            return
+        }
         Task {
             do {
                 let paneID = try await service(for: device).createTab(
@@ -1475,7 +1815,26 @@ final class AppModel: ObservableObject {
             let service = service(for: device)
             var createdPane: String?
             do {
-                let pane = try await service.createTab(workspaceID: workspaceID, cwd: nil, label: kind)
+                var workspaceID = workspaceID
+                var reusePane: String?
+                if let current = workspaceID,
+                   let revived = try await reviveRetainedWorkspace(
+                    device: device,
+                    workspaceID: current
+                   ) {
+                    workspaceID = revived.workspaceID
+                    reusePane = revived.rootPaneID
+                }
+                let pane: String
+                if let reusePane {
+                    pane = reusePane
+                } else {
+                    pane = try await service.createTab(
+                        workspaceID: workspaceID,
+                        cwd: nil,
+                        label: kind
+                    )
+                }
                 createdPane = pane
                 do {
                     try await service.startAgent(
@@ -1497,6 +1856,9 @@ final class AppModel: ObservableObject {
                 }
                 await refresh(device.id)
                 isFileManagerActive = false
+                if let workspaceID {
+                    selectedSpace = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
+                }
                 selectedPane = PaneRef(deviceID: device.id, paneID: pane)
             } catch {
                 if let createdPane {
@@ -1505,5 +1867,189 @@ final class AppModel: ObservableObject {
                 actionError = actionErrorMessage(error, device: device)
             }
         }
+    }
+
+    // MARK: - Retained empty spaces
+
+    func rememberClosedSpace(
+        deviceID: UUID,
+        workspaceID: String,
+        label: String?,
+        cwd: String?,
+        sortIndex: Int
+    ) {
+        let key = spaceKey(deviceID: deviceID, workspaceID: workspaceID)
+        guard !dismissedSpaceKeys.contains(key) else { return }
+        if retainedSpaces.contains(where: { $0.deviceID == deviceID && $0.workspaceID == workspaceID }) {
+            return
+        }
+        let space = RetainedSpace(
+            deviceID: deviceID,
+            workspaceID: workspaceID,
+            label: optionalNonEmpty(label ?? "") ?? workspaceID,
+            cwd: optionalNonEmpty(cwd ?? ""),
+            sortIndex: sortIndex
+        )
+        retainedSpaces.append(space)
+        RetainedSpaceStore.save(retainedSpaces)
+        if sessions[deviceID]?.workspaces.contains(where: { $0.workspaceID == workspaceID }) != true {
+            let index = min(max(sortIndex, 0), sessions[deviceID]?.workspaces.count ?? 0)
+            sessions[deviceID]?.workspaces.insert(space.workspaceInfo, at: index)
+        }
+    }
+
+    func dismissRetainedSpace(_ ref: SpaceRef) {
+        markSpaceDismissed(ref)
+        retainedSpaces.removeAll { $0.deviceID == ref.deviceID && $0.workspaceID == ref.workspaceID }
+        RetainedSpaceStore.save(retainedSpaces)
+        sessions[ref.deviceID]?.workspaces.removeAll { $0.workspaceID == ref.workspaceID }
+        if selectedSpace == ref { selectedSpace = nil }
+    }
+
+    func markSpaceDismissed(_ ref: SpaceRef) {
+        dismissedSpaceKeys.insert(spaceKey(deviceID: ref.deviceID, workspaceID: ref.workspaceID))
+    }
+
+    func reviveRetainedSpace(_ ref: SpaceRef) {
+        let previous = spaceReviveTask
+        spaceReviveTask = Task {
+            await previous?.value
+            guard let device = device(ref.deviceID) else { return }
+            do {
+                guard let created = try await reviveRetainedWorkspace(
+                    device: device,
+                    workspaceID: ref.workspaceID
+                ) else { return }
+                await refresh(device.id)
+                isFileManagerActive = false
+                selectedSpace = SpaceRef(deviceID: device.id, workspaceID: created.workspaceID)
+                selectedPane = created.rootPaneID.map { PaneRef(deviceID: device.id, paneID: $0) }
+                selectedShellID = nil
+            } catch {
+                actionError = actionErrorMessage(error, device: device)
+            }
+        }
+    }
+
+    private func reviveRetainedWorkspace(
+        device: Device,
+        workspaceID: String
+    ) async throws -> (workspaceID: String, rootPaneID: String?)? {
+        let ref = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
+        guard !revivingSpaces.contains(ref), let retained = retainedSpaces.first(
+            where: { $0.deviceID == device.id && $0.workspaceID == workspaceID }
+        ) else { return nil }
+        // Keep the gray row visible until creation and server-side ordering both finish.
+        revivingSpaces.insert(ref)
+        defer {
+            revivingSpaces.remove(ref)
+            statusGenerations[device.id, default: 0] &+= 1
+            scheduleRefresh(device.id)
+        }
+        let ordered = session(device.id).workspaces
+        let index = ordered.firstIndex { $0.workspaceID == workspaceID } ?? retained.sortIndex
+        let before = ordered.dropFirst(max(index + 1, 0)).first {
+            !isRetainedSpace(SpaceRef(deviceID: device.id, workspaceID: $0.workspaceID))
+        }?.workspaceID
+        let service = service(for: device)
+        let created = try await service.createWorkspace(label: retained.label, cwd: retained.cwd)
+        do {
+            try await service.moveWorkspaceBlock(
+                workspaceIDs: [created.workspaceID], beforeWorkspaceID: before
+            )
+        } catch {
+            // A failed reorder must leave the original gray space available for retry.
+            markSpaceDismissed(SpaceRef(deviceID: device.id, workspaceID: created.workspaceID))
+            do {
+                try await service.closeWorkspace(workspaceID: created.workspaceID)
+            } catch {
+                // Cleanup failed: keep the live terminal discoverable; never hide it.
+                dismissedSpaceKeys.remove(spaceKey(deviceID: device.id, workspaceID: created.workspaceID))
+                throw error
+            }
+            throw error
+        }
+        markSpaceDismissed(ref)
+        retainedSpaces.removeAll { $0.ref == ref }
+        RetainedSpaceStore.save(retainedSpaces)
+        if let slot = sessions[device.id]?.workspaces.firstIndex(where: { $0.workspaceID == workspaceID }) {
+            sessions[device.id]?.workspaces[slot] = WorkspaceInfo(
+                workspaceID: created.workspaceID,
+                number: slot,
+                label: retained.label,
+                paneCount: 1,
+                tabCount: 1,
+                cwd: retained.cwd
+            )
+        }
+        // Remap the filter before the next snapshot; the old ID would briefly
+        // select All Spaces and expose unrelated sessions during restoration.
+        if selectedSpace == ref {
+            selectedSpace = SpaceRef(deviceID: device.id, workspaceID: created.workspaceID)
+        }
+        return created
+    }
+
+    private func retainDisappearedSpaces(
+        deviceID: UUID,
+        previous: [WorkspaceInfo],
+        liveIDs: Set<String>,
+        paneCWD: [String: String]
+    ) {
+        for (index, workspace) in previous.enumerated() {
+            let key = spaceKey(deviceID: deviceID, workspaceID: workspace.workspaceID)
+            if liveIDs.contains(workspace.workspaceID) { continue }
+            if dismissedSpaceKeys.contains(key) { continue }
+            rememberClosedSpace(
+                deviceID: deviceID,
+                workspaceID: workspace.workspaceID,
+                label: workspace.label,
+                cwd: workspace.cwd ?? paneCWD[workspace.workspaceID],
+                sortIndex: index
+            )
+        }
+    }
+
+    private func pruneRetainedSpaces(deviceID: UUID, liveIDs: Set<String>) {
+        let before = retainedSpaces.count
+        retainedSpaces.removeAll { $0.deviceID == deviceID && liveIDs.contains($0.workspaceID) }
+        if retainedSpaces.count != before {
+            RetainedSpaceStore.save(retainedSpaces)
+        }
+    }
+
+    private func removeRetainedSpaces(deviceID: UUID) {
+        let before = retainedSpaces.count
+        retainedSpaces.removeAll { $0.deviceID == deviceID }
+        if retainedSpaces.count != before {
+            RetainedSpaceStore.save(retainedSpaces)
+        }
+    }
+
+    private func renameRetainedSpace(_ ref: SpaceRef, label: String) {
+        guard let index = retainedSpaces.firstIndex(
+            where: { $0.deviceID == ref.deviceID && $0.workspaceID == ref.workspaceID }
+        ) else { return }
+        retainedSpaces[index].label = label
+        RetainedSpaceStore.save(retainedSpaces)
+        if let workspaceIndex = sessions[ref.deviceID]?.workspaces.firstIndex(
+            where: { $0.workspaceID == ref.workspaceID }
+        ), let workspace = sessions[ref.deviceID]?.workspaces[workspaceIndex] {
+            sessions[ref.deviceID]?.workspaces[workspaceIndex] = WorkspaceInfo(
+                workspaceID: workspace.workspaceID,
+                number: workspace.number,
+                label: label,
+                focused: workspace.focused,
+                paneCount: workspace.paneCount,
+                tabCount: workspace.tabCount,
+                activeTabID: workspace.activeTabID,
+                agentStatusRaw: workspace.agentStatusRaw,
+                cwd: workspace.cwd
+            )
+        }
+    }
+
+    private func spaceKey(deviceID: UUID, workspaceID: String) -> String {
+        "\(deviceID.uuidString)-\(workspaceID)"
     }
 }

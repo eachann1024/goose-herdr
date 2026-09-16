@@ -172,9 +172,33 @@ public struct WorkspaceInfo: Codable, Sendable, Identifiable, Equatable {
     public let tabCount: Int?
     public let activeTabID: String?
     public let agentStatusRaw: String?
+    /// Root directory when herdr reports it on workspace.list / snapshot.
+    public let cwd: String?
 
     public var id: String { workspaceID }
     public var status: AgentStatus { AgentStatus(wire: agentStatusRaw) }
+
+    public init(
+        workspaceID: String,
+        number: Int,
+        label: String,
+        focused: Bool? = nil,
+        paneCount: Int? = nil,
+        tabCount: Int? = nil,
+        activeTabID: String? = nil,
+        agentStatusRaw: String? = nil,
+        cwd: String? = nil
+    ) {
+        self.workspaceID = workspaceID
+        self.number = number
+        self.label = label
+        self.focused = focused
+        self.paneCount = paneCount
+        self.tabCount = tabCount
+        self.activeTabID = activeTabID
+        self.agentStatusRaw = agentStatusRaw
+        self.cwd = cwd
+    }
 
     enum CodingKeys: String, CodingKey {
         case workspaceID = "workspace_id"
@@ -185,6 +209,7 @@ public struct WorkspaceInfo: Codable, Sendable, Identifiable, Equatable {
         case tabCount = "tab_count"
         case activeTabID = "active_tab_id"
         case agentStatusRaw = "agent_status"
+        case cwd
     }
 }
 
