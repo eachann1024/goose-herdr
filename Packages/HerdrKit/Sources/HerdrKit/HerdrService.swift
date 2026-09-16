@@ -427,8 +427,10 @@ public actor HerdrService {
                       Self.isPaneBusy(error),
                       clock.now < retryDeadline,
                       let pinnedTerminalID,
-                      await paneShellStillInitializing(paneID, pinnedTerminalID: pinnedTerminalID)
+                      (try? await paneTerminalID(paneID)) == pinnedTerminalID
                 else { throw error }
+                // Startup may briefly foreground git/starship/etc. Wait without
+                // sending input; agent.start itself validates shell availability.
                 try await Task.sleep(for: .milliseconds(100))
             }
         }
@@ -441,61 +443,12 @@ public actor HerdrService {
         return code == "agent_pane_busy"
     }
 
-    private func paneShellStillInitializing(_ paneID: String, pinnedTerminalID: String) async -> Bool {
-        guard let terminalID = try? await paneTerminalID(paneID),
-              terminalID == pinnedTerminalID,
-              let initializing = try? await paneShellIsInitializing(paneID)
-        else { return false }
-        return initializing
-    }
-
     private func paneTerminalID(_ paneID: String) async throws -> String? {
         let result = try await client().request(
             method: "pane.get",
             params: .object(["pane_id": .string(paneID)])
         )
         return result["pane"]?["terminal_id"]?.stringValue
-    }
-
-    private func paneShellIsInitializing(_ paneID: String) async throws -> Bool {
-        let result = try await client().request(
-            method: "pane.process_info",
-            params: .object(["pane_id": .string(paneID)])
-        )
-        guard let processInfo = result["process_info"] else { return false }
-        return Self.processInfoShowsShellInitialization(processInfo)
-    }
-
-    static func processInfoShowsShellInitialization(_ processInfo: JSONValue) -> Bool {
-        guard let shellPID = integer(processInfo["shell_pid"]),
-              integer(processInfo["foreground_process_group_id"]) == shellPID
-        else { return false }
-        return processInfo["foreground_processes"]?.arrayValue?.contains { process in
-            guard integer(process["pid"]) == shellPID else { return false }
-            let name = process["name"]?.stringValue
-            let argv0 = process["argv"]?.arrayValue?.first?.stringValue
-            return name.map(isPaneShellProcessName) == true
-                || argv0.map(isPaneShellProcessName) == true
-        } == true
-    }
-
-    private static func integer(_ value: JSONValue?) -> UInt64? {
-        guard case .number(let number)? = value else { return nil }
-        return UInt64(exactly: number)
-    }
-
-    private static func isPaneShellProcessName(_ value: String) -> Bool {
-        var name = value
-            .split(whereSeparator: { $0 == "/" || $0 == "\\" })
-            .last
-            .map(String.init) ?? value
-        while name.hasPrefix("-") { name.removeFirst() }
-        name = name.lowercased()
-        if name.hasSuffix(".exe") { name.removeLast(4) }
-        return [
-            "sh", "bash", "dash", "zsh", "fish", "ksh", "mksh", "csh", "tcsh",
-            "elvish", "xonsh", "nu", "pwsh", "powershell", "cmd",
-        ].contains(name)
     }
 
     /// Reads the pane's visible screen with ANSI intact. Returns nil text when unchanged
