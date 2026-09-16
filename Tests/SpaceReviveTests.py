@@ -65,6 +65,7 @@ enum Failure: Error { case create, move, close }
         set { sessions[deviceID] = Session(workspaces: newValue) }
     }
     var deviceID = UUID()
+    var selectedSpace: SpaceRef?
     var scheduled = 0
     func session(_ id: UUID) -> Session { Session(workspaces: rows) }
     func service(for device: Device) -> Service { backend }
@@ -96,6 +97,7 @@ enum Failure: Error { case create, move, close }
         ] {
             let model = Model()
             model.deviceID = device.id
+            model.selectedSpace = SpaceRef(deviceID: device.id, workspaceID: target)
             model.rows = order.map { WorkspaceInfo(workspaceID: $0) }
             model.backend.ids = order.filter { !ghosts.contains($0) }
             model.retainedSpaces = ghosts.map {
@@ -107,6 +109,7 @@ enum Failure: Error { case create, move, close }
             }
             let restored = try await model.reviveRetainedWorkspace(device: device, workspaceID: target)
             assert(restored?.workspaceID == "new" && restored?.rootPaneID == "pane")
+            assert(model.selectedSpace == SpaceRef(deviceID: device.id, workspaceID: "new"), "filter must move before refresh, never flash All Spaces")
             assert(model.rows.map(\.workspaceID) == order.map { $0 == target ? "new" : $0 }, "replace the gray row in place before refresh")
             let merged = RetainedSpaceStore.merging(model.backend.ids.map { WorkspaceInfo(workspaceID: $0) }, with: model.retainedSpaces)
             assert(merged.map(\.workspaceID) == order.map { $0 == target ? "new" : $0 })

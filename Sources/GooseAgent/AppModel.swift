@@ -1982,6 +1982,11 @@ final class AppModel: ObservableObject {
                 cwd: retained.cwd
             )
         }
+        // Remap the filter before the next snapshot; the old ID would briefly
+        // select All Spaces and expose unrelated sessions during restoration.
+        if selectedSpace == ref {
+            selectedSpace = SpaceRef(deviceID: device.id, workspaceID: created.workspaceID)
+        }
         return created
     }
 
