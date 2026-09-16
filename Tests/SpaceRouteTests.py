@@ -14,6 +14,22 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 source = (ROOT / "Sources/GooseAgent/AppModel.swift").read_text()
 shortcuts = (ROOT / "Sources/GooseAgent/KeyboardShortcuts.swift").read_text()
+commands = (ROOT / "Sources/GooseAgent/GooseAgentApp.swift").read_text()
+for name, direction in [("focusLeft", "left"), ("focusRight", "right"), ("focusUp", "up"), ("focusDown", "down"), ("swapLeft", "left"), ("swapRight", "right"), ("swapUp", "up"), ("swapDown", "down")]:
+    binding = f"modifiers: AppShortcuts.chord(for: .{name}).modifiers)"
+    assert commands.split(binding, 1)[1].lstrip().startswith(
+        f".disabled(focusedSplitTree?.neighbor(.{direction}) == nil)"
+    ), f"{name} must only be enabled when that neighbor exists"
+import re
+catalog = json.loads((ROOT / "Resources/Localizable.xcstrings").read_text())["strings"]
+titles = dict(re.findall(r'case \.(\w+): return "([^"]+)"', shortcuts.split("    var detail:")[0]))
+details = dict(re.findall(r'case \.(\w+): return "([^"]+)"', shortcuts.split("    var detail:")[1].split("    var conflictLabel:")[0]))
+assert titles.keys() == details.keys()
+for name, detail in details.items():
+    assert detail != titles[name], f"{name} repeats its title as description"
+    for language in ("en", "zh-Hans"):
+        for text in (titles[name], detail):
+            assert catalog[text]["localizations"][language]["stringUnit"]["value"]
 
 
 def slice_between(start: str, end: str) -> str:
@@ -230,8 +246,24 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
                "Pi default is option-P")
         assert(AgentKindShortcuts.chord(for: "codex", store: store) == nil,
                "other agents stay unbound")
-        assert(AppShortcutID.allCases.map { $0.rawValue }.sorted() == ["close", "newSpace", "quickNewTerminal"],
-               "no general New Agent shortcut remains")
+        assert(AppShortcutID.allCases.map { $0.rawValue }.sorted() == [
+            "close", "equalizeSplits", "focusDown", "focusLeft", "focusRight", "focusUp",
+            "growPane", "narrowPane", "newSpace", "quickNewTerminal", "shrinkPane",
+            "splitHorizontal", "splitVertical", "swapDown", "swapLeft", "swapRight", "swapUp", "widenPane"
+        ], "the general shortcut set includes every split command and no retired New Agent command")
+
+        assert(Set(AppShortcutID.allCases.map { $0.defaultChord }).count == AppShortcutID.allCases.count)
+        for (id, focus) in [(AppShortcutID.swapLeft, AppShortcutID.focusLeft), (.swapRight, .focusRight), (.swapUp, .focusUp), (.swapDown, .focusDown)] {
+            assert(id.defaultChord.modifiers == [.command, .option, .shift])
+            assert(id.defaultChord.key == focus.defaultChord.key)
+            assert(AppShortcuts.isChordTaken(id.defaultChord, excludingGeneral: id, store: store) == nil)
+            assert(AppShortcuts.isChordTaken(id.defaultChord, excludingGeneral: .close, store: store) == id.conflictLabel)
+            let custom = KeyChord(key: "s", modifiers: [.command, .shift])
+            AppShortcuts.set(custom, for: id, store: store)
+            assert(AppShortcuts.chord(for: id, store: store) == custom)
+            AppShortcuts.reset(id, store: store)
+            assert(AppShortcuts.chord(for: id, store: store) == id.defaultChord)
+        }
         let legacyStore = ["quickNewAgent": KeyChord(key: "n", modifiers: [.command, .shift]),
                            "newAgent": KeyChord(key: "a", modifiers: [.command])]
         store.set(try! JSONEncoder().encode(legacyStore), forKey: AppShortcuts.storageKey)

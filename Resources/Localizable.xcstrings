@@ -1,6 +1,358 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Swap with Left Pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap with Left Pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与左侧面板交换"
+          }
+        }
+      }
+    },
+    "Swap the focused terminal with the neighboring pane on the left": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap the focused terminal with the neighboring pane on the left"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前聚焦终端与左侧相邻面板交换位置"
+          }
+        }
+      }
+    },
+    "Swap with Right Pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap with Right Pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与右侧面板交换"
+          }
+        }
+      }
+    },
+    "Swap the focused terminal with the neighboring pane on the right": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap the focused terminal with the neighboring pane on the right"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前聚焦终端与右侧相邻面板交换位置"
+          }
+        }
+      }
+    },
+    "Swap with Top Pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap with Top Pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与上方面板交换"
+          }
+        }
+      }
+    },
+    "Swap the focused terminal with the neighboring pane above": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap the focused terminal with the neighboring pane above"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前聚焦终端与上方相邻面板交换位置"
+          }
+        }
+      }
+    },
+    "Swap with Bottom Pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap with Bottom Pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与下方面板交换"
+          }
+        }
+      }
+    },
+    "Swap the focused terminal with the neighboring pane below": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap the focused terminal with the neighboring pane below"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将当前聚焦终端与下方相邻面板交换位置"
+          }
+        }
+      }
+    },
+    "Drag to another pane's top strip to swap. Click for swap actions.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag to another pane's top strip to swap. Click for swap actions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖到另一面板顶部操作条以交换位置。单击可选择交换方向。"
+          }
+        }
+      }
+    },
+    "Rearrange Terminal Pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rearrange Terminal Pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新排列终端面板"
+          }
+        }
+      }
+    },
+    "Release to Swap Panes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Release to Swap Panes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "松开以交换面板"
+          }
+        }
+      }
+    },
+    "Open a local terminal to the right of the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a local terminal to the right of the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在当前聚焦面板右侧打开本地终端"
+          }
+        }
+      }
+    },
+    "Open a local terminal below the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a local terminal below the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在当前聚焦面板下方打开本地终端"
+          }
+        }
+      }
+    },
+    "Move focus to the neighboring pane on the left": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move focus to the neighboring pane on the left"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聚焦左侧相邻面板"
+          }
+        }
+      }
+    },
+    "Move focus to the neighboring pane on the right": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move focus to the neighboring pane on the right"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聚焦右侧相邻面板"
+          }
+        }
+      }
+    },
+    "Move focus to the neighboring pane above": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move focus to the neighboring pane above"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聚焦上方相邻面板"
+          }
+        }
+      }
+    },
+    "Move focus to the neighboring pane below": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move focus to the neighboring pane below"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聚焦下方相邻面板"
+          }
+        }
+      }
+    },
+    "Increase the width of the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Increase the width of the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增加当前聚焦面板的宽度"
+          }
+        }
+      }
+    },
+    "Decrease the width of the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrease the width of the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "减小当前聚焦面板的宽度"
+          }
+        }
+      }
+    },
+    "Increase the height of the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Increase the height of the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "增加当前聚焦面板的高度"
+          }
+        }
+      }
+    },
+    "Decrease the height of the focused pane": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrease the height of the focused pane"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "减小当前聚焦面板的高度"
+          }
+        }
+      }
+    },
+    "Give panes equal space along each split axis": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Give panes equal space along each split axis"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沿各分屏方向均分面板空间"
+          }
+        }
+      }
+    },
     "language.name.en": {
       "localizations": {
         "en": {
@@ -593,6 +945,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "增高当前面板"
+          }
+        }
+      }
+    },
+    "Equalize Splits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Equalize Splits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "均分面板"
           }
         }
       }
@@ -3086,19 +3454,19 @@
         }
       }
     },
-    "Close split, terminal, agent, or window": {
+    "Close split, terminal, agent, space, or window": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close split, terminal, agent, or window"
+            "value": "Close split, terminal, agent, space, or window"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭分屏、终端、Agent 或窗口"
+            "value": "关闭分屏、终端、Agent、空间或窗口"
           }
         }
       }

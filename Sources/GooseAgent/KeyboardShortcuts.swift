@@ -6,6 +6,21 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
     case quickNewTerminal
     case newSpace
     case close
+    case splitVertical
+    case splitHorizontal
+    case focusLeft
+    case focusRight
+    case focusUp
+    case focusDown
+    case swapLeft
+    case swapRight
+    case swapUp
+    case swapDown
+    case widenPane
+    case narrowPane
+    case growPane
+    case shrinkPane
+    case equalizeSplits
 
     var id: String { rawValue }
 
@@ -14,6 +29,21 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .quickNewTerminal: return "New Terminal"
         case .newSpace: return "New Space"
         case .close: return "Close"
+        case .splitVertical: return "Split Vertically"
+        case .splitHorizontal: return "Split Horizontally"
+        case .focusLeft: return "Focus Left Pane"
+        case .focusRight: return "Focus Right Pane"
+        case .focusUp: return "Focus Top Pane"
+        case .focusDown: return "Focus Bottom Pane"
+        case .widenPane: return "Widen Active Pane"
+        case .narrowPane: return "Narrow Active Pane"
+        case .growPane: return "Grow Active Pane"
+        case .shrinkPane: return "Shrink Active Pane"
+        case .swapLeft: return "Swap with Left Pane"
+        case .swapRight: return "Swap with Right Pane"
+        case .swapUp: return "Swap with Top Pane"
+        case .swapDown: return "Swap with Bottom Pane"
+        case .equalizeSplits: return "Equalize Splits"
         }
     }
 
@@ -21,7 +51,22 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         switch self {
         case .quickNewTerminal: return "Opens a terminal in the current space"
         case .newSpace: return "Opens the New Space sheet"
-        case .close: return "Close split, terminal, agent, or window"
+        case .close: return "Close split, terminal, agent, space, or window"
+        case .splitVertical: return "Open a local terminal to the right of the focused pane"
+        case .splitHorizontal: return "Open a local terminal below the focused pane"
+        case .focusLeft: return "Move focus to the neighboring pane on the left"
+        case .focusRight: return "Move focus to the neighboring pane on the right"
+        case .focusUp: return "Move focus to the neighboring pane above"
+        case .focusDown: return "Move focus to the neighboring pane below"
+        case .widenPane: return "Increase the width of the focused pane"
+        case .narrowPane: return "Decrease the width of the focused pane"
+        case .growPane: return "Increase the height of the focused pane"
+        case .shrinkPane: return "Decrease the height of the focused pane"
+        case .swapLeft: return "Swap the focused terminal with the neighboring pane on the left"
+        case .swapRight: return "Swap the focused terminal with the neighboring pane on the right"
+        case .swapUp: return "Swap the focused terminal with the neighboring pane above"
+        case .swapDown: return "Swap the focused terminal with the neighboring pane below"
+        case .equalizeSplits: return "Give panes equal space along each split axis"
         }
     }
 
@@ -30,6 +75,21 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .quickNewTerminal: return String(localized: "New Terminal")
         case .newSpace: return String(localized: "New Space")
         case .close: return String(localized: "Close")
+        case .splitVertical: return String(localized: "Split Vertically")
+        case .splitHorizontal: return String(localized: "Split Horizontally")
+        case .focusLeft: return String(localized: "Focus Left Pane")
+        case .focusRight: return String(localized: "Focus Right Pane")
+        case .focusUp: return String(localized: "Focus Top Pane")
+        case .focusDown: return String(localized: "Focus Bottom Pane")
+        case .widenPane: return String(localized: "Widen Active Pane")
+        case .narrowPane: return String(localized: "Narrow Active Pane")
+        case .growPane: return String(localized: "Grow Active Pane")
+        case .shrinkPane: return String(localized: "Shrink Active Pane")
+        case .swapLeft: return String(localized: "Swap with Left Pane")
+        case .swapRight: return String(localized: "Swap with Right Pane")
+        case .swapUp: return String(localized: "Swap with Top Pane")
+        case .swapDown: return String(localized: "Swap with Bottom Pane")
+        case .equalizeSplits: return String(localized: "Equalize Splits")
         }
     }
 
@@ -38,6 +98,21 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .quickNewTerminal: return KeyChord(key: "t", modifiers: .command)
         case .newSpace: return KeyChord(key: "n", modifiers: .command)
         case .close: return KeyChord(key: "w", modifiers: .command)
+        case .splitVertical: return KeyChord(key: "d", modifiers: .command)
+        case .splitHorizontal: return KeyChord(key: "d", modifiers: [.command, .shift])
+        case .focusLeft: return KeyChord(key: "\u{F702}", modifiers: [.command, .option])
+        case .focusRight: return KeyChord(key: "\u{F703}", modifiers: [.command, .option])
+        case .focusUp: return KeyChord(key: "\u{F700}", modifiers: [.command, .option])
+        case .focusDown: return KeyChord(key: "\u{F701}", modifiers: [.command, .option])
+        case .widenPane: return KeyChord(key: "\u{F703}", modifiers: [.command, .control])
+        case .narrowPane: return KeyChord(key: "\u{F702}", modifiers: [.command, .control])
+        case .growPane: return KeyChord(key: "\u{F701}", modifiers: [.command, .control])
+        case .shrinkPane: return KeyChord(key: "\u{F700}", modifiers: [.command, .control])
+        case .swapLeft: return KeyChord(key: "\u{F702}", modifiers: [.command, .option, .shift])
+        case .swapRight: return KeyChord(key: "\u{F703}", modifiers: [.command, .option, .shift])
+        case .swapUp: return KeyChord(key: "\u{F700}", modifiers: [.command, .option, .shift])
+        case .swapDown: return KeyChord(key: "\u{F701}", modifiers: [.command, .option, .shift])
+        case .equalizeSplits: return KeyChord(key: "=", modifiers: [.command, .control])
         }
     }
 }
@@ -65,7 +140,8 @@ struct KeyChord: Codable, Equatable, Hashable {
         if m.contains(.option) { parts.append("⌥") }
         if m.contains(.shift) { parts.append("⇧") }
         if m.contains(.command) { parts.append("⌘") }
-        parts.append(key.uppercased())
+        let arrows = ["\u{F702}": "←", "\u{F703}": "→", "\u{F700}": "↑", "\u{F701}": "↓"]
+        parts.append(arrows[key] ?? key.uppercased())
         return parts.joined()
     }
 
@@ -92,7 +168,7 @@ struct KeyChord: Codable, Equatable, Hashable {
             return nil
         }
         // Ignore pure modifier taps.
-        guard ch.asciiValue != nil || ch.isLetter || ch.isNumber else { return nil }
+        guard ch.asciiValue != nil || ch.isLetter || ch.isNumber || ["\u{F700}", "\u{F701}", "\u{F702}", "\u{F703}"].contains(String(ch)) else { return nil }
         var mods: EventModifiers = []
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags.contains(.command) { mods.insert(.command) }

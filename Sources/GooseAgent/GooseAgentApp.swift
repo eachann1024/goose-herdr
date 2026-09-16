@@ -49,9 +49,24 @@ extension FocusedValues {
         set { self[AppModelFocusedValueKey.self] = newValue }
     }
 
-    var splitAxis: SplitAxis? {
-        get { self[SplitAxisFocusedValueKey.self] }
-        set { self[SplitAxisFocusedValueKey.self] = newValue }
+    var terminalSplitTree: TerminalSplitTree? {
+        get { self[TerminalSplitTreeFocusedValueKey.self] }
+        set { self[TerminalSplitTreeFocusedValueKey.self] = newValue }
+    }
+}
+
+/// Routes ⌘W to Settings/panels. Settings becomes `mainWindow` when focused,
+/// so comparing against main is not enough to tell it apart from the console.
+enum CloseCommandRouting {
+    static func isSettingsWindow(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue == "settings"
+            || window.title == String(localized: "Settings")
+    }
+
+    static func shouldDismissKeyWindow(_ key: NSWindow?, main: NSWindow?) -> Bool {
+        guard let key else { return false }
+        if isSettingsWindow(key) { return true }
+        return key !== main
     }
 }
 
@@ -61,7 +76,8 @@ struct GooseAgentApp: App {
     @AppStorage("app.theme") private var themePreference = "system"
     @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
     @FocusedValue(\.appModel) private var focusedModel
-    @FocusedValue(\.splitAxis) private var focusedSplitAxis
+    @FocusedValue(\.terminalSplitTree) private var focusedSplitTree
+    private var focusedHasTerminalSplits: Bool? { focusedSplitTree.map { $0.leaves.count > 1 } }
 
     init() {
         if ProcessInfo.processInfo.environment[SSHCredentialStore.askPassModeEnvironmentKey] == "1" {
@@ -103,77 +119,77 @@ struct GooseAgentApp: App {
             }
 
             CommandMenu("Terminal") {
-                // Guarded on selectedAttachedEntry, not just on the model: with the placeholder
-                // on screen there is no SplitContainer to render into, so a split would
-                // be invisible yet leave shellSplitAxis non-nil — and the next ⌘W would
-                // "close" that phantom instead of the window.
-                Button("Split Vertically") { focusedModel?.shellSplitAxis = .vertical }
-                    .keyboardShortcut("d", modifiers: .command)
-                    .disabled(focusedModel?.selectedAttachedEntry == nil)
-                Button("Split Horizontally") { focusedModel?.shellSplitAxis = .horizontal }
-                    .keyboardShortcut("d", modifiers: [.command, .shift])
-                    .disabled(focusedModel?.selectedAttachedEntry == nil)
-
+                let _ = shortcutsRevision
+                Button("Split Vertically") { focusedModel?.splitFocusedTerminal(.vertical) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .splitVertical).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .splitVertical).modifiers)
+                    .disabled(focusedHasTerminalSplits == nil)
+                Button("Split Horizontally") { focusedModel?.splitFocusedTerminal(.horizontal) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .splitHorizontal).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .splitHorizontal).modifiers)
+                    .disabled(focusedHasTerminalSplits == nil)
                 Divider()
-
-                // Eight items with FIXED shortcuts, enabled per axis — deliberately not
-                // four items whose shortcut follows the axis. Measured: `.disabled` IS
-                // revalidated when the menu opens, but a key equivalent already registered
-                // in the NSMenu is NOT reassigned when the commands body re-evaluates, so
-                // the arrows stayed frozen on the axis that was current at launch.
-                // Labels name the direction so no two rows read the same.
-                //
-                // Focus is directional and idempotent: the left/top pane is always the
-                // agent, the right/bottom one always the shell.
-                Button("Focus Left Pane") {
-                    if let model = focusedModel { focusSplitSide(.agent, in: model) }
-                }
-                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
-                .disabled(focusedSplitAxis != .vertical)
-                Button("Focus Right Pane") {
-                    if let model = focusedModel { focusSplitSide(.shell, in: model) }
-                }
-                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
-                .disabled(focusedSplitAxis != .vertical)
-                Button("Focus Top Pane") {
-                    if let model = focusedModel { focusSplitSide(.agent, in: model) }
-                }
-                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-                .disabled(focusedSplitAxis != .horizontal)
-                Button("Focus Bottom Pane") {
-                    if let model = focusedModel { focusSplitSide(.shell, in: model) }
-                }
-                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-                .disabled(focusedSplitAxis != .horizontal)
-
+                Button("Focus Left Pane") { focusedModel?.focusSplit(.left) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .focusLeft).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .focusLeft).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.left) == nil)
+                Button("Focus Right Pane") { focusedModel?.focusSplit(.right) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .focusRight).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .focusRight).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.right) == nil)
+                Button("Focus Top Pane") { focusedModel?.focusSplit(.up) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .focusUp).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .focusUp).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.up) == nil)
+                Button("Focus Bottom Pane") { focusedModel?.focusSplit(.down) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .focusDown).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .focusDown).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.down) == nil)
                 Divider()
+                Button("Swap with Left Pane") { focusedModel?.swapSplit(.left) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .swapLeft).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .swapLeft).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.left) == nil)
+                Button("Swap with Right Pane") { focusedModel?.swapSplit(.right) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .swapRight).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .swapRight).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.right) == nil)
+                Button("Swap with Top Pane") { focusedModel?.swapSplit(.up) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .swapUp).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .swapUp).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.up) == nil)
+                Button("Swap with Bottom Pane") { focusedModel?.swapSplit(.down) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .swapDown).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .swapDown).modifiers)
+                    .disabled(focusedSplitTree?.neighbor(.down) == nil)
+                Divider()
+                Button("Widen Active Pane") { focusedModel?.resizeSplit(along: .vertical, grow: true) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .widenPane).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .widenPane).modifiers)
+                    .disabled(focusedHasTerminalSplits != true)
+                Button("Narrow Active Pane") { focusedModel?.resizeSplit(along: .vertical, grow: false) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .narrowPane).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .narrowPane).modifiers)
+                    .disabled(focusedHasTerminalSplits != true)
+                Button("Grow Active Pane") { focusedModel?.resizeSplit(along: .horizontal, grow: true) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .growPane).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .growPane).modifiers)
+                    .disabled(focusedHasTerminalSplits != true)
+                Button("Shrink Active Pane") { focusedModel?.resizeSplit(along: .horizontal, grow: false) }
+                    .keyboardShortcut(AppShortcuts.chord(for: .shrinkPane).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .shrinkPane).modifiers)
+                    .disabled(focusedHasTerminalSplits != true)
+                Divider()
+                Button("Equalize Splits") { focusedModel?.equalizeSplits() }
+                    .keyboardShortcut(AppShortcuts.chord(for: .equalizeSplits).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .equalizeSplits).modifiers)
+                    .disabled(focusedHasTerminalSplits != true)
 
-                // Resize moves the divider by 5% relative to the active pane.
-                Button("Widen Active Pane") {
-                    if let model = focusedModel { resizeSplit(grow: true, in: model) }
-                }
-                .keyboardShortcut(.rightArrow, modifiers: [.command, .control])
-                .disabled(focusedSplitAxis != .vertical)
-                Button("Narrow Active Pane") {
-                    if let model = focusedModel { resizeSplit(grow: false, in: model) }
-                }
-                .keyboardShortcut(.leftArrow, modifiers: [.command, .control])
-                .disabled(focusedSplitAxis != .vertical)
-                Button("Grow Active Pane") {
-                    if let model = focusedModel { resizeSplit(grow: true, in: model) }
-                }
-                .keyboardShortcut(.downArrow, modifiers: [.command, .control])
-                .disabled(focusedSplitAxis != .horizontal)
-                Button("Shrink Active Pane") {
-                    if let model = focusedModel { resizeSplit(grow: false, in: model) }
-                }
-                .keyboardShortcut(.upArrow, modifiers: [.command, .control])
-                .disabled(focusedSplitAxis != .horizontal)
             }
             CommandGroup(replacing: .saveItem) {
                 // ⌘W peels the onion: secondary window → split → standalone
-                // terminal → leave Files → confirm-close agent pane → window.
-                // Spaces stay sidebar-only (too destructive for a hotkey).
+                // terminal → leave Files → pane → empty space. The window is
+                // last, and only when no session or space remains.
                 let _ = shortcutsRevision
                 Button(closeButtonTitle) {
                     performCloseCommand()
@@ -308,20 +324,7 @@ struct GooseAgentApp: App {
 
     // MARK: - Split commands
 
-    private func focusSplitSide(_ side: SplitSide, in model: AppModel) {
-        guard model.shellSplitAxis != nil else { return }
-        let target = (side == .agent) ? model.splitAgentView : model.splitShellView
-        guard let target, let window = target.window else { return }
-        window.makeFirstResponder(target)
-    }
 
-    private func resizeSplit(grow: Bool, in model: AppModel) {
-        guard model.shellSplitAxis != nil else { return }
-        let step = 0.05
-        let signed = (model.activeSplitSide == .agent) ? step : -step
-        let delta = grow ? signed : -signed
-        model.splitRatio = min(0.8, max(0.2, model.splitRatio + delta))
-    }
 
     private static func runSSHAskPass() -> Never {
         let environment = ProcessInfo.processInfo.environment
