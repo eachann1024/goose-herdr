@@ -53,14 +53,21 @@ select_space = slice_between("    func selectSpace(_ ref: SpaceRef?) {", "\n    
 selected_space = slice_between("    @Published var selectedSpace", "\n    @Published var selectedPane")
 filtering = slice_between("    func setDeviceFilter(", "\n    /// When jumping into a space")
 quick_new_terminal = slice_between("    /// Create a terminal in the current space", "\n    /// Explicit per-kind commands")
-quick_new_agent = slice_between("    /// Explicit per-kind commands start an agent without a picker.", "\n    func startNewTerminal(")
+quick_new_agent = slice_between("    /// Explicit per-kind commands start an agent without a picker.", "\n    /// Select the new pane. All Spaces")
+reveal_created = slice_between("    /// Select the new pane. All Spaces", "\n    func startNewTerminal(")
+start_new_terminal = slice_between("    func startNewTerminal(", "\n    /// New Agent:")
+start_new_agent = slice_between("    func startNewAgent(", "\n    // MARK: - Retained empty spaces")
 for name, chunk in [
     ("quickNewTerminal", quick_new_terminal),
     ("quickNewAgent", quick_new_agent),
+    ("revealCreatedSession", reveal_created),
     ("selectSpace", select_space),
     ("isFilteredOut", filtering),
 ]:
     assert name in chunk, f"slice marker drifted for {name}"
+assert "revealCreatedSession(" in start_new_terminal and "revealCreatedSession(" in start_new_agent
+assert "selectedSpace = SpaceRef" not in start_new_terminal
+assert "selectedSpace = SpaceRef" not in start_new_agent
 
 extracted = "\n".join(
     chunk.replace("private func", "func").replace("private var", "var")
@@ -75,6 +82,7 @@ extracted = "\n".join(
         filtering,
         quick_new_terminal,
         quick_new_agent,
+        reveal_created,
     ]
 )
 
@@ -142,6 +150,7 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
     }
     func refresh(_ id: UUID) async {}
     func actionErrorMessage(_ error: Error, device: Device) -> String { "failed" }
+    func requestCreatedSessionFocus() { focusRequests += 1 }
 
 ''' + extracted + '''
 }
@@ -270,6 +279,25 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         assert(model.launched.count == 1 && model.launched[0].0 == local.id && model.launched[0].2 == "w1",
                "per-kind agent launch still works in the selected space")
 
+        // Creating a session from All Spaces must not steal the space filter.
+        model.selectedSpace = nil
+        model.selectedPane = first
+        model.isFileManagerActive = true
+        model.selectedShellID = UUID()
+        model.focusRequests = 0
+        model.revealCreatedSession(deviceID: local.id, workspaceID: "w2", paneID: "new-pane")
+        assert(model.selectedSpace == nil, "All Spaces stays selected after a new session")
+        assert(model.selectedPane == PaneRef(deviceID: local.id, paneID: "new-pane"))
+        assert(model.selectedShellID == nil && model.isFileManagerActive == false)
+        assert(model.focusRequests == 1, "new session asks the terminal to take key focus")
+        model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
+        model.revealCreatedSession(deviceID: local.id, workspaceID: "w1", paneID: "w1-new")
+        assert(model.selectedSpace == SpaceRef(deviceID: local.id, workspaceID: "w1"),
+               "an active space filter stays on that space")
+        model.revealCreatedSession(deviceID: local.id, workspaceID: "revived", paneID: "revived-pane")
+        assert(model.selectedSpace == SpaceRef(deviceID: local.id, workspaceID: "revived"),
+               "a revived workspace remaps the existing space filter")
+
         // Shortcuts: New Terminal / New Space / Close / Pi keep the required
         // defaults, stay remappable, and the retired general New Agent id is gone
         // rather than shadowing a live binding.
@@ -330,6 +358,11 @@ for stale in [
 ]:
     assert stale not in all_sources, f"removed sidebar/agent-picker wiring came back: {stale}"
 assert "func quickNewAgent(kind: String)" in source, "per-kind agent launch must stay"
+assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
+assert "0.5" in source[source.index("func requestCreatedSessionFocus("):source.index("func focusSplit(")], "slow attach needs a late focus retry"
+root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()
+become_key = root_view.split("NSWindow.didBecomeKeyNotification", 1)[1]
+assert "pendingCreatedSessionFocus = false" not in become_key.split("private func paneHandleInset", 1)[0], "key-window noise must not flush created-session focus"
 assert "func activateSpace(" in source, "empty spaces open a terminal on click"
 assert "Create first: closing the last pane" not in source, "last-tab close must not spawn a replacement"
 root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()

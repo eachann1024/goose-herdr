@@ -2121,6 +2121,17 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// Select the new pane. All Spaces (`selectedSpace == nil`) stays put.
+    func revealCreatedSession(deviceID: UUID, workspaceID: String?, paneID: String) {
+        isFileManagerActive = false
+        if selectedSpace != nil, let workspaceID {
+            selectedSpace = SpaceRef(deviceID: deviceID, workspaceID: workspaceID)
+        }
+        selectedPane = PaneRef(deviceID: deviceID, paneID: paneID)
+        selectedShellID = nil
+        requestCreatedSessionFocus()
+    }
+
     func startNewTerminal(device: Device, workspaceID: String) {
         let ref = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
         if isRetainedSpace(ref) {
@@ -2135,10 +2146,7 @@ final class AppModel: ObservableObject {
                     label: nil
                 )
                 await refresh(device.id)
-                isFileManagerActive = false
-                selectedSpace = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
-                selectedPane = PaneRef(deviceID: device.id, paneID: paneID)
-                selectedShellID = nil
+                revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: paneID)
             } catch {
                 actionError = actionErrorMessage(error, device: device)
             }
@@ -2199,11 +2207,7 @@ final class AppModel: ObservableObject {
                     )
                 }
                 await refresh(device.id)
-                isFileManagerActive = false
-                if let workspaceID {
-                    selectedSpace = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
-                }
-                selectedPane = PaneRef(deviceID: device.id, paneID: pane)
+                revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: pane)
             } catch {
                 if let createdPane {
                     try? await service.closePane(paneID: createdPane)
