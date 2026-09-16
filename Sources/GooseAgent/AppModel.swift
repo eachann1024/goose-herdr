@@ -110,13 +110,6 @@ struct SSHAuthenticationRequest: Identifiable {
     var id: UUID { deviceID }
 }
 
-/// vertical = panes side by side with a vertical divider (iTerm2's convention).
-enum SplitAxis { case vertical, horizontal }
-
-/// Identifies one of the two panes in the ⌘D split. Used for focus tracking and
-/// keyboard-driven resize.
-enum SplitSide { case agent, shell }
-
 /// A standalone local or SSH shell shown as its own sidebar entry — app-owned,
 /// outside any herdr space (unlike the persistent herdr terminals under
 /// TERMINALS) and not the ⌘D split.
