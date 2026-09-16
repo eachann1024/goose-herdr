@@ -217,10 +217,12 @@ struct SearchSheet: View {
                 )
             case .space(let entry):
                 let empty = model.isEmptySpace(entry)
-                Image(systemName: "folder")
-                    .font(.system(size: 12))
-                    .foregroundStyle(empty ? Theme.textGhost : Theme.textSecondary)
-                    .frame(width: 16)
+                ProjectSpaceIcon(
+                    path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID),
+                    size: 13,
+                    slot: 16
+                )
+                .foregroundStyle(empty ? Theme.textGhost : Theme.textSecondary)
                 Text(entry.workspace.label)
                     .font(.system(size: 13))
                     .foregroundStyle(empty ? Theme.textGhost : Theme.text)

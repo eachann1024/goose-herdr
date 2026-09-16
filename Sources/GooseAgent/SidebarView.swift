@@ -873,6 +873,7 @@ struct SidebarRowButtonStyle: ButtonStyle {
 private struct SpaceIcon: View {
     let systemName: String
     var size: CGFloat = 14
+    var slot: CGFloat = 20
 
     var body: some View {
         Image(systemName: systemName)
@@ -880,12 +881,14 @@ private struct SpaceIcon: View {
             .scaledToFit()
             .font(.system(size: size, weight: .regular))
             .frame(width: size, height: size)
-            .frame(width: 20, height: 20)
+            .frame(width: slot, height: slot)
     }
 }
 
-private struct ProjectSpaceIcon: View {
+struct ProjectSpaceIcon: View {
     let path: String?
+    var size: CGFloat = 14
+    var slot: CGFloat = 20
     @State private var image: CGImage?
 
     var body: some View {
@@ -895,10 +898,10 @@ private struct ProjectSpaceIcon: View {
                     .resizable()
                     .renderingMode(.original)
                     .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .frame(width: 20, height: 20)
+                    .frame(width: size, height: size)
+                    .frame(width: slot, height: slot)
             } else {
-                SpaceIcon(systemName: "square", size: 12)
+                SpaceIcon(systemName: "square", size: min(size, 12), slot: slot)
             }
         }
         .accessibilityHidden(true)
@@ -931,7 +934,7 @@ private struct SpaceRowView: View {
             ? Theme.textGhost
             : (selected ? Theme.textSecondary : Theme.textTertiary)
         HStack(spacing: 8) {
-            ProjectSpaceIcon(path: entry.device.isLocal ? model.spacePath(for: entry) : nil)
+            ProjectSpaceIcon(path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID))
                 .foregroundStyle(iconColor)
             Text(entry.workspace.label)
                 .font(.system(size: 13))

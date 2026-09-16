@@ -814,21 +814,30 @@ final class AppModel: ObservableObject {
     }
 
     /// Best-effort root path for a space: workspace.cwd, else any pane/agent cwd in it.
-    func spacePath(for entry: SpaceEntry) -> String? {
-        if let cwd = entry.workspace.cwd?.trimmingCharacters(in: .whitespacesAndNewlines), !cwd.isEmpty {
-            return cwd
-        }
-        let state = session(entry.device.id)
-        let wid = entry.workspace.workspaceID
-        if let cwd = state.agents.first(where: { $0.workspaceID == wid })?.cwd,
+    func spacePath(deviceID: UUID, workspaceID: String) -> String? {
+        let state = session(deviceID)
+        if let cwd = state.workspaces.first(where: { $0.workspaceID == workspaceID })?.cwd,
            let trimmed = optionalNonEmpty(cwd) {
             return trimmed
         }
-        if let cwd = state.panes.first(where: { $0.workspaceID == wid })?.cwd,
+        if let cwd = state.agents.first(where: { $0.workspaceID == workspaceID })?.cwd,
+           let trimmed = optionalNonEmpty(cwd) {
+            return trimmed
+        }
+        if let cwd = state.panes.first(where: { $0.workspaceID == workspaceID })?.cwd,
            let trimmed = optionalNonEmpty(cwd) {
             return trimmed
         }
         return nil
+    }
+
+    func spacePath(for entry: SpaceEntry) -> String? {
+        spacePath(deviceID: entry.device.id, workspaceID: entry.workspace.workspaceID)
+    }
+
+    /// Local project root used to load a space icon. Remote paths are not readable here.
+    func spaceIconPath(device: Device, workspaceID: String) -> String? {
+        device.isLocal ? spacePath(deviceID: device.id, workspaceID: workspaceID) : nil
     }
 
     private func optionalNonEmpty(_ value: String) -> String? {

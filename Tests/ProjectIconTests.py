@@ -6,9 +6,15 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sidebar = (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text()
-assert 'ProjectSpaceIcon(path: entry.device.isLocal ? model.spacePath(for: entry) : nil)' in sidebar
-assert 'SpaceIcon(systemName: "square", size: 12)' in sidebar
+assert 'ProjectSpaceIcon(path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID))' in sidebar
+assert 'spaceIconPath(device: entry.device, workspaceID: entry.pane.workspaceID)' in sidebar
+assert 'spaceIconPath(device: entry.device, workspaceID: agent.workspaceID)' in sidebar
+assert 'SpaceIcon(systemName: "square", size: min(size, 12), slot: slot)' in sidebar
 assert 'BrandIcon(resource: "all-spaces", size: 14' in sidebar
+model = (ROOT / "Sources/GooseAgent/AppModel.swift").read_text()
+assert 'func spaceIconPath(device: Device, workspaceID: String)' in model
+search = (ROOT / "Sources/GooseAgent/SearchView.swift").read_text()
+assert 'spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID)' in search
 
 harness = r'''
 import Darwin
