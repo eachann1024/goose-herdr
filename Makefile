@@ -3,7 +3,7 @@
 # GooseAgentMobile / HerdrSSH are arm64-only (libssh2 + OpenSSL xcframeworks).
 # Keep code signing on so Simulator Keychain (device SSH key) works; unsigned
 # builds log errSecMissingEntitlement (-34018) on every launch.
-MOBILE_BUILD = xcodebuild -project GooseHerdr.xcodeproj -scheme GooseAgentobile \
+MOBILE_BUILD = xcodebuild -project GooseHerdr.xcodeproj -scheme GooseAgentMobile \
 	-configuration Debug \
 	-destination 'platform=iOS Simulator,name=iPhone 17,arch=arm64' \
 	-derivedDataPath build-ios build \

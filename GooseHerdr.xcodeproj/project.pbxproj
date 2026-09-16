@@ -1,0 +1,859 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02C86337DF7E0E5E7EA1D2BA /* devin.svg in Resources */ = {isa = PBXBuildFile; fileRef = 5D00FF1D7FF01EC2FA0C7EC9 /* devin.svg */; };
+		0C81EC00775EB5F805FA8A9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67AF5692D3507468CBB4629D /* Assets.xcassets */; };
+		11DC94441DEF561728A6BA9E /* fedora.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1A71AF60D595A5A16AF7631B /* fedora.svg */; };
+		14D8D423703F80E20243711D /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 3482681EFD0E64BA6FC21FA1 /* HerdrSSH */; };
+		157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 72C4468DFABCE812360B4E91 /* Localizable.xcstrings */; };
+		157D542C417A15BAB15D4FE7 /* kimi.svg in Resources */ = {isa = PBXBuildFile; fileRef = 789246C5538DABCA14EEB1F7 /* kimi.svg */; };
+		1CF771238F5891EFCD8FAF3D /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5743D33617E2DB7CD44D219 /* TerminalView.swift */; };
+		20D6AE804E142787A0DCB8A0 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A37DF529D06B06944D4383 /* SearchView.swift */; };
+		24133119D69052C790F42D6E /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 524DE7449C9FA70A3E067466 /* AppIcon.icon */; };
+		28C8AF5A37E9F0AE4530F3D2 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 5862B6EF6B0151336816D4AA /* GhosttyTerminal */; };
+		2CA9C20DEA51AFB914D518AB /* SplitContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCD73906300DC1BA152C6409 /* SplitContainer.swift */; };
+		2E1C027CF005EC87C2F2CB11 /* rockylinux.svg in Resources */ = {isa = PBXBuildFile; fileRef = A1D631BB14B24F79C711B9B2 /* rockylinux.svg */; };
+		3020D3CDE7F8AA0D61E461F1 /* qwen.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1A74755801354B09B6BF9731 /* qwen.svg */; };
+		339C4E11C5E5D1AD51B8E516 /* GooseAgentApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0DFA02031D0856B0CEB9656 /* GooseAgentApp.swift */; };
+		38160F631582B5624DD37274 /* AppLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCA02FF2AFA8457CEC8CD683 /* AppLanguage.swift */; };
+		39586062BFFAF656922B1F5F /* HerdrTailcat in Frameworks */ = {isa = PBXBuildFile; productRef = A0D03B3E1623428777A38FD7 /* HerdrTailcat */; };
+		3A380AACFB03B3907245B12C /* ubuntu.svg in Resources */ = {isa = PBXBuildFile; fileRef = 7AA8AF251BA707869E0CF6FF /* ubuntu.svg */; };
+		3E706EF2D316723A60BAE7C2 /* MobileRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5611BA58FDCD86538240AA /* MobileRootView.swift */; };
+		3EAFD2F9FFB04B698FC6AB87 /* linux.svg in Resources */ = {isa = PBXBuildFile; fileRef = ACFC8E5162F0D0C4516038B1 /* linux.svg */; };
+		3EE7CBCD58EA4C61960474A2 /* opencode.svg in Resources */ = {isa = PBXBuildFile; fileRef = D930F4A0E1C79E1F997D3A07 /* opencode.svg */; };
+		3F938B7422ED0232CEFE3EDD /* codex-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = C14464C61F909AFF06F748E9 /* codex-color.svg */; };
+		47ED40472F2336B0B526469E /* FocusRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F7FBEF72B1F403289EED32 /* FocusRing.swift */; };
+		4891D1E5EC60107DECA1285C /* TerminalColorFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0E96F4DFCA8D83E9398959 /* TerminalColorFilter.swift */; };
+		4D556AA90C463E37044B1134 /* archlinux.svg in Resources */ = {isa = PBXBuildFile; fileRef = 745165B27185A5B902096F2C /* archlinux.svg */; };
+		4ED832100998E75A96F6EA9A /* nixos.svg in Resources */ = {isa = PBXBuildFile; fileRef = 4AA6FE9C32751702C74809E5 /* nixos.svg */; };
+		502BAAA433985EBF2EE13A0C /* cline.svg in Resources */ = {isa = PBXBuildFile; fileRef = B76377E1421736710A04BA6E /* cline.svg */; };
+		532BC9689DD6BC40FAE097ED /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 159198DD38609F259A454DA8 /* Theme.swift */; };
+		53B440919C3A4A2765B64EA9 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BDD68618550AFA8888C0916 /* SidebarView.swift */; };
+		568165E65ECC51C5FA9DEBD4 /* HerdrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 48ECCC2444EB3E3575FD6B6D /* HerdrKit */; };
+		57CE927F6C8EC3E88DD6A6D5 /* DeviceKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36C14137E05AFC80A635CC7 /* DeviceKey.swift */; };
+		5A287607F4018DF2B8FB30FD /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1244C5780C2545B4A1A6EC3 /* NotificationManager.swift */; };
+		620059A8C94ABE26D98C1524 /* MobileTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C01D92FF039BA296443340B /* MobileTransport.swift */; };
+		6779761E8E122AC83D84D277 /* openai.svg in Resources */ = {isa = PBXBuildFile; fileRef = B26FCC3F202B1D826DE13253 /* openai.svg */; };
+		6780B0282F1DCE0127FBB959 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAA4DFBDCE1498476B6D6092 /* ContentView.swift */; };
+		7044A9323285F62ADFD193BC /* githubcopilot.svg in Resources */ = {isa = PBXBuildFile; fileRef = B20E437AA6776B42F13C0256 /* githubcopilot.svg */; };
+		744E7514D2D52623496AE761 /* alpinelinux.svg in Resources */ = {isa = PBXBuildFile; fileRef = 15A71F94DD6AE1DD1D458378 /* alpinelinux.svg */; };
+		76BE2266E485BB7130A34551 /* grok.svg in Resources */ = {isa = PBXBuildFile; fileRef = 0C75BF1A91360DCB5AB6E1CA /* grok.svg */; };
+		77A02AA72238BB49922D3F1C /* pi.svg in Resources */ = {isa = PBXBuildFile; fileRef = A9137ED87694F0AB6056F40A /* pi.svg */; };
+		7850A009F52431AE3FA7DC8E /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9319099D8AC5AE31F898D439 /* AppModel.swift */; };
+		7EC1E9C573429C26F60244ED /* MobileTerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CC6DBB5F02048F1EF6774F /* MobileTerminalView.swift */; };
+		84F4D29BA2CDE6D2D6975719 /* cursor.svg in Resources */ = {isa = PBXBuildFile; fileRef = E9A61CC5F39F74C0745D976D /* cursor.svg */; };
+		892CA3A55DF16EB7D05855B8 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = 2867FDF7C3EF7180738D6F83 /* GhosttyTerminal */; };
+		8E7B62F6F5072CAED94E1381 /* SymbolsNerdFontMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 56C06A7249F347CDEF660760 /* SymbolsNerdFontMono-Regular.ttf */; };
+		9545BBD0D5538EDF74B5CF2F /* qwen-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = E4C7118EF10E5CF231ECA9E5 /* qwen-color.svg */; };
+		95AFA266AC36431D3F171E24 /* TerminalProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F4ECCF2EE9440945B51A18 /* TerminalProcess.swift */; };
+		975C9FF6FEFC8B8D4D2EC5B4 /* SidebarSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 490C5502F40B0CD714744DE1 /* SidebarSection.swift */; };
+		9A53F44122DD76711C3369D6 /* BrandIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D9F1BFF5F6FAB43106587A /* BrandIcon.swift */; };
+		9CEE76F1B71E17A28433ED70 /* HerdrTailcat in Frameworks */ = {isa = PBXBuildFile; productRef = AFFFB7D6B5583EAFA173ABDC /* HerdrTailcat */; };
+		A06703FE9014C4ED50E30833 /* devin-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = FC46DDDA77CFED26DAC9AF84 /* devin-color.svg */; };
+		A87674FE77146575EF180FCF /* codex.svg in Resources */ = {isa = PBXBuildFile; fileRef = 80CD6F66C5C92A2050A7022A /* codex.svg */; };
+		A9C305A9D4A6F6B584D453AF /* SpaceRowDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61101261D68C9042BCCFE177 /* SpaceRowDrag.swift */; };
+		B202FA6F3F6A6AD89338DBAB /* kimi-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = 6599A317503E6C37E23289C1 /* kimi-color.svg */; };
+		B5AE5F815AF4F96E34331245 /* herdrm-icon-rounded.png in Resources */ = {isa = PBXBuildFile; fileRef = C62E9FA0ADE8F0873086AC01 /* herdrm-icon-rounded.png */; };
+		B7D461BC957565D6D9C56965 /* HerdrKit in Frameworks */ = {isa = PBXBuildFile; productRef = 1FD4EE554AC5A96C46CEDD38 /* HerdrKit */; };
+		BCB2E3576BE5B2DE00A29019 /* claude-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = E3C6580B5727857663682E5E /* claude-color.svg */; };
+		C16974A6526928018632B690 /* debian.svg in Resources */ = {isa = PBXBuildFile; fileRef = 513FF7F49CFB48D8F7F2B263 /* debian.svg */; };
+		CBC810EA77B807BAD67329CE /* deepseek.svg in Resources */ = {isa = PBXBuildFile; fileRef = 167CCABCC67A0D806AFB7798 /* deepseek.svg */; };
+		D05023A686891E399E538B84 /* copilot-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = 6585CE2E3E5F326E02604218 /* copilot-color.svg */; };
+		D05BCC116BBEEDD5F29D8CE9 /* MobileAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52CA4C65BCBD5D8AA67648F2 /* MobileAppModel.swift */; };
+		D30369A345DB0F72B0D9B995 /* moonshot.svg in Resources */ = {isa = PBXBuildFile; fileRef = D0EACC72F6F0F82D73AE7C9D /* moonshot.svg */; };
+		D30FA8C4CB5D714957E5A2C1 /* MobileDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FA547EDBB7C5AD4B137CE1E /* MobileDevice.swift */; };
+		D536BA63E42FC0EFEEB9E4B5 /* DeviceFilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B6623A95F708CFCC1F237A /* DeviceFilesView.swift */; };
+		D811FC5C2B35D82219C33A20 /* deepseek-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = 953E2AB183C7C3E2618E6E8B /* deepseek-color.svg */; };
+		D86ABEB0A19BF87AA1FC0D4E /* centos.svg in Resources */ = {isa = PBXBuildFile; fileRef = EAFA8A8CA3359287C9B8A4F1 /* centos.svg */; };
+		DE13A3CEDFA483F4D62F840A /* amp.svg in Resources */ = {isa = PBXBuildFile; fileRef = E0D3DB97C21C84C4E7D29FF0 /* amp.svg */; };
+		E1B2C227F20CCA983AC4E235 /* freebsd.svg in Resources */ = {isa = PBXBuildFile; fileRef = 518077B5E9A51FACE9899B60 /* freebsd.svg */; };
+		E718892D4579CBFCE43610C2 /* kiro-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = 188576E989F057FE2D506030 /* kiro-color.svg */; };
+		EFA1B5E256377B0EFFB677D2 /* claude.svg in Resources */ = {isa = PBXBuildFile; fileRef = 8BCC63B7EEA3065CF1E2B7F0 /* claude.svg */; };
+		F1088F539AB0993B9F248AE6 /* copilot.svg in Resources */ = {isa = PBXBuildFile; fileRef = E2CD7D0DD6A05AD4CFDCDA79 /* copilot.svg */; };
+		F11D93A42F4A20C50E5265D1 /* apple.svg in Resources */ = {isa = PBXBuildFile; fileRef = 7B29869E5C6E237030EFEDDE /* apple.svg */; };
+		F169FD2CAF71DD4A45FA3D7E /* herdrm-icon.svg in Resources */ = {isa = PBXBuildFile; fileRef = B1D5B1CF01E96590303E7CD6 /* herdrm-icon.svg */; };
+		F67422A459B2F4E26FCB0F2C /* herdrm-icon-1024.png in Resources */ = {isa = PBXBuildFile; fileRef = D11E098FFE692354535C005C /* herdrm-icon-1024.png */; };
+		F776EC2328B8780AC9AB0732 /* kiro.svg in Resources */ = {isa = PBXBuildFile; fileRef = D4EED65EAC7E64E26F565723 /* kiro.svg */; };
+		F966A658ADEBB6FDF367AA41 /* gemini.svg in Resources */ = {isa = PBXBuildFile; fileRef = 54492E116C2AFFA7E4542E86 /* gemini.svg */; };
+		FA6D8BEC0C694078CC6E930F /* GooseAgentMobileApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACBE474403E023855AC83637 /* GooseAgentMobileApp.swift */; };
+		FC950F7702CD2098EE70920A /* amp-color.svg in Resources */ = {isa = PBXBuildFile; fileRef = 93B839FE04F4F28F38ACD196 /* amp-color.svg */; };
+		FE157D7275F385DD6FA522DE /* SymbolsNerdFont-LICENSE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 47B3F61C3D9E8B2B7AE7A141 /* SymbolsNerdFont-LICENSE.txt */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0025534BB4835BD94F3EAAD7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		09F7FBEF72B1F403289EED32 /* FocusRing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusRing.swift; sourceTree = "<group>"; };
+		0C75BF1A91360DCB5AB6E1CA /* grok.svg */ = {isa = PBXFileReference; path = grok.svg; sourceTree = "<group>"; };
+		0FA778653F2468166B8CF28E /* HerdrKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrKit; path = Packages/HerdrKit; sourceTree = SOURCE_ROOT; };
+		159198DD38609F259A454DA8 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		15A71F94DD6AE1DD1D458378 /* alpinelinux.svg */ = {isa = PBXFileReference; path = alpinelinux.svg; sourceTree = "<group>"; };
+		167CCABCC67A0D806AFB7798 /* deepseek.svg */ = {isa = PBXFileReference; path = deepseek.svg; sourceTree = "<group>"; };
+		188576E989F057FE2D506030 /* kiro-color.svg */ = {isa = PBXFileReference; path = "kiro-color.svg"; sourceTree = "<group>"; };
+		1A71AF60D595A5A16AF7631B /* fedora.svg */ = {isa = PBXFileReference; path = fedora.svg; sourceTree = "<group>"; };
+		1A74755801354B09B6BF9731 /* qwen.svg */ = {isa = PBXFileReference; path = qwen.svg; sourceTree = "<group>"; };
+		40CC6DBB5F02048F1EF6774F /* MobileTerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTerminalView.swift; sourceTree = "<group>"; };
+		42F4ECCF2EE9440945B51A18 /* TerminalProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalProcess.swift; sourceTree = "<group>"; };
+		47B3F61C3D9E8B2B7AE7A141 /* SymbolsNerdFont-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "SymbolsNerdFont-LICENSE.txt"; sourceTree = "<group>"; };
+		490C5502F40B0CD714744DE1 /* SidebarSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSection.swift; sourceTree = "<group>"; };
+		4AA6FE9C32751702C74809E5 /* nixos.svg */ = {isa = PBXFileReference; path = nixos.svg; sourceTree = "<group>"; };
+		513FF7F49CFB48D8F7F2B263 /* debian.svg */ = {isa = PBXFileReference; path = debian.svg; sourceTree = "<group>"; };
+		518077B5E9A51FACE9899B60 /* freebsd.svg */ = {isa = PBXFileReference; path = freebsd.svg; sourceTree = "<group>"; };
+		524DE7449C9FA70A3E067466 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
+		52CA4C65BCBD5D8AA67648F2 /* MobileAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAppModel.swift; sourceTree = "<group>"; };
+		54492E116C2AFFA7E4542E86 /* gemini.svg */ = {isa = PBXFileReference; path = gemini.svg; sourceTree = "<group>"; };
+		56C06A7249F347CDEF660760 /* SymbolsNerdFontMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SymbolsNerdFontMono-Regular.ttf"; sourceTree = "<group>"; };
+		5718FA9FC25673D149EE9B9B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		5B5611BA58FDCD86538240AA /* MobileRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileRootView.swift; sourceTree = "<group>"; };
+		5C01D92FF039BA296443340B /* MobileTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTransport.swift; sourceTree = "<group>"; };
+		5D00FF1D7FF01EC2FA0C7EC9 /* devin.svg */ = {isa = PBXFileReference; path = devin.svg; sourceTree = "<group>"; };
+		5E0E96F4DFCA8D83E9398959 /* TerminalColorFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalColorFilter.swift; sourceTree = "<group>"; };
+		5FF88ECFFF5966FA3BF25AA0 /* GooseAgentMobile.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = GooseAgentMobile.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		61101261D68C9042BCCFE177 /* SpaceRowDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpaceRowDrag.swift; sourceTree = "<group>"; };
+		6585CE2E3E5F326E02604218 /* copilot-color.svg */ = {isa = PBXFileReference; path = "copilot-color.svg"; sourceTree = "<group>"; };
+		6599A317503E6C37E23289C1 /* kimi-color.svg */ = {isa = PBXFileReference; path = "kimi-color.svg"; sourceTree = "<group>"; };
+		67AF5692D3507468CBB4629D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6BDD68618550AFA8888C0916 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		6FA547EDBB7C5AD4B137CE1E /* MobileDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileDevice.swift; sourceTree = "<group>"; };
+		72C4468DFABCE812360B4E91 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		745165B27185A5B902096F2C /* archlinux.svg */ = {isa = PBXFileReference; path = archlinux.svg; sourceTree = "<group>"; };
+		75E79B1392983D37150864D0 /* GooseAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GooseAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		789246C5538DABCA14EEB1F7 /* kimi.svg */ = {isa = PBXFileReference; path = kimi.svg; sourceTree = "<group>"; };
+		7AA8AF251BA707869E0CF6FF /* ubuntu.svg */ = {isa = PBXFileReference; path = ubuntu.svg; sourceTree = "<group>"; };
+		7B29869E5C6E237030EFEDDE /* apple.svg */ = {isa = PBXFileReference; path = apple.svg; sourceTree = "<group>"; };
+		80CD6F66C5C92A2050A7022A /* codex.svg */ = {isa = PBXFileReference; path = codex.svg; sourceTree = "<group>"; };
+		8BCC63B7EEA3065CF1E2B7F0 /* claude.svg */ = {isa = PBXFileReference; path = claude.svg; sourceTree = "<group>"; };
+		9319099D8AC5AE31F898D439 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		93B839FE04F4F28F38ACD196 /* amp-color.svg */ = {isa = PBXFileReference; path = "amp-color.svg"; sourceTree = "<group>"; };
+		953E2AB183C7C3E2618E6E8B /* deepseek-color.svg */ = {isa = PBXFileReference; path = "deepseek-color.svg"; sourceTree = "<group>"; };
+		A0DFA02031D0856B0CEB9656 /* GooseAgentApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooseAgentApp.swift; sourceTree = "<group>"; };
+		A1244C5780C2545B4A1A6EC3 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		A1D631BB14B24F79C711B9B2 /* rockylinux.svg */ = {isa = PBXFileReference; path = rockylinux.svg; sourceTree = "<group>"; };
+		A9137ED87694F0AB6056F40A /* pi.svg */ = {isa = PBXFileReference; path = pi.svg; sourceTree = "<group>"; };
+		ACBE474403E023855AC83637 /* GooseAgentMobileApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooseAgentMobileApp.swift; sourceTree = "<group>"; };
+		ACFC8E5162F0D0C4516038B1 /* linux.svg */ = {isa = PBXFileReference; path = linux.svg; sourceTree = "<group>"; };
+		B1D5B1CF01E96590303E7CD6 /* herdrm-icon.svg */ = {isa = PBXFileReference; path = "herdrm-icon.svg"; sourceTree = "<group>"; };
+		B20E437AA6776B42F13C0256 /* githubcopilot.svg */ = {isa = PBXFileReference; path = githubcopilot.svg; sourceTree = "<group>"; };
+		B26FCC3F202B1D826DE13253 /* openai.svg */ = {isa = PBXFileReference; path = openai.svg; sourceTree = "<group>"; };
+		B36C14137E05AFC80A635CC7 /* DeviceKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceKey.swift; sourceTree = "<group>"; };
+		B76377E1421736710A04BA6E /* cline.svg */ = {isa = PBXFileReference; path = cline.svg; sourceTree = "<group>"; };
+		B8263284FF35B61A72A6E7E7 /* HerdrTailcat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrTailcat; path = Packages/HerdrTailcat; sourceTree = SOURCE_ROOT; };
+		C11021DE4CAACE009A494C76 /* HerdrSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrSSH; path = Packages/HerdrSSH; sourceTree = SOURCE_ROOT; };
+		C14464C61F909AFF06F748E9 /* codex-color.svg */ = {isa = PBXFileReference; path = "codex-color.svg"; sourceTree = "<group>"; };
+		C5743D33617E2DB7CD44D219 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
+		C62E9FA0ADE8F0873086AC01 /* herdrm-icon-rounded.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "herdrm-icon-rounded.png"; sourceTree = "<group>"; };
+		D0EACC72F6F0F82D73AE7C9D /* moonshot.svg */ = {isa = PBXFileReference; path = moonshot.svg; sourceTree = "<group>"; };
+		D11E098FFE692354535C005C /* herdrm-icon-1024.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "herdrm-icon-1024.png"; sourceTree = "<group>"; };
+		D2D9F1BFF5F6FAB43106587A /* BrandIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandIcon.swift; sourceTree = "<group>"; };
+		D4EED65EAC7E64E26F565723 /* kiro.svg */ = {isa = PBXFileReference; path = kiro.svg; sourceTree = "<group>"; };
+		D930F4A0E1C79E1F997D3A07 /* opencode.svg */ = {isa = PBXFileReference; path = opencode.svg; sourceTree = "<group>"; };
+		DCA02FF2AFA8457CEC8CD683 /* AppLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguage.swift; sourceTree = "<group>"; };
+		E0D3DB97C21C84C4E7D29FF0 /* amp.svg */ = {isa = PBXFileReference; path = amp.svg; sourceTree = "<group>"; };
+		E2A37DF529D06B06944D4383 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		E2CD7D0DD6A05AD4CFDCDA79 /* copilot.svg */ = {isa = PBXFileReference; path = copilot.svg; sourceTree = "<group>"; };
+		E3C6580B5727857663682E5E /* claude-color.svg */ = {isa = PBXFileReference; path = "claude-color.svg"; sourceTree = "<group>"; };
+		E4C7118EF10E5CF231ECA9E5 /* qwen-color.svg */ = {isa = PBXFileReference; path = "qwen-color.svg"; sourceTree = "<group>"; };
+		E9A61CC5F39F74C0745D976D /* cursor.svg */ = {isa = PBXFileReference; path = cursor.svg; sourceTree = "<group>"; };
+		EAA4DFBDCE1498476B6D6092 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		EAFA8A8CA3359287C9B8A4F1 /* centos.svg */ = {isa = PBXFileReference; path = centos.svg; sourceTree = "<group>"; };
+		F2B6623A95F708CFCC1F237A /* DeviceFilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceFilesView.swift; sourceTree = "<group>"; };
+		FC46DDDA77CFED26DAC9AF84 /* devin-color.svg */ = {isa = PBXFileReference; path = "devin-color.svg"; sourceTree = "<group>"; };
+		FCD73906300DC1BA152C6409 /* SplitContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitContainer.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		2037441FB45E0DD08282E63C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				568165E65ECC51C5FA9DEBD4 /* HerdrKit in Frameworks */,
+				39586062BFFAF656922B1F5F /* HerdrTailcat in Frameworks */,
+				28C8AF5A37E9F0AE4530F3D2 /* GhosttyTerminal in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E48A102E257D2FB8DF1D9B53 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B7D461BC957565D6D9C56965 /* HerdrKit in Frameworks */,
+				14D8D423703F80E20243711D /* HerdrSSH in Frameworks */,
+				9CEE76F1B71E17A28433ED70 /* HerdrTailcat in Frameworks */,
+				892CA3A55DF16EB7D05855B8 /* GhosttyTerminal in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		03572F915F58E27514FA3790 /* AppIcon */ = {
+			isa = PBXGroup;
+			children = (
+				D11E098FFE692354535C005C /* herdrm-icon-1024.png */,
+				C62E9FA0ADE8F0873086AC01 /* herdrm-icon-rounded.png */,
+				B1D5B1CF01E96590303E7CD6 /* herdrm-icon.svg */,
+			);
+			path = AppIcon;
+			sourceTree = "<group>";
+		};
+		1F1AA3D4E84CF591A0C457BA = {
+			isa = PBXGroup;
+			children = (
+				99A20A4EF7C3DF3F0F4F09BA /* GooseAgent */,
+				E517433ABA1F43A1FF076848 /* GooseAgentMobile */,
+				6C8E8AADB9E10262E257DADE /* Packages */,
+				E9428BCD55A0DD2D52D8A75A /* Resources */,
+				BC5DB25BF4FDE47983A4380C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6C8E8AADB9E10262E257DADE /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				0FA778653F2468166B8CF28E /* HerdrKit */,
+				C11021DE4CAACE009A494C76 /* HerdrSSH */,
+				B8263284FF35B61A72A6E7E7 /* HerdrTailcat */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		85071FB04724F297F1FF9E9B /* OSIcons */ = {
+			isa = PBXGroup;
+			children = (
+				15A71F94DD6AE1DD1D458378 /* alpinelinux.svg */,
+				7B29869E5C6E237030EFEDDE /* apple.svg */,
+				745165B27185A5B902096F2C /* archlinux.svg */,
+				EAFA8A8CA3359287C9B8A4F1 /* centos.svg */,
+				513FF7F49CFB48D8F7F2B263 /* debian.svg */,
+				1A71AF60D595A5A16AF7631B /* fedora.svg */,
+				518077B5E9A51FACE9899B60 /* freebsd.svg */,
+				ACFC8E5162F0D0C4516038B1 /* linux.svg */,
+				4AA6FE9C32751702C74809E5 /* nixos.svg */,
+				A1D631BB14B24F79C711B9B2 /* rockylinux.svg */,
+				7AA8AF251BA707869E0CF6FF /* ubuntu.svg */,
+			);
+			path = OSIcons;
+			sourceTree = "<group>";
+		};
+		99A20A4EF7C3DF3F0F4F09BA /* GooseAgent */ = {
+			isa = PBXGroup;
+			children = (
+				524DE7449C9FA70A3E067466 /* AppIcon.icon */,
+				DCA02FF2AFA8457CEC8CD683 /* AppLanguage.swift */,
+				9319099D8AC5AE31F898D439 /* AppModel.swift */,
+				67AF5692D3507468CBB4629D /* Assets.xcassets */,
+				D2D9F1BFF5F6FAB43106587A /* BrandIcon.swift */,
+				EAA4DFBDCE1498476B6D6092 /* ContentView.swift */,
+				F2B6623A95F708CFCC1F237A /* DeviceFilesView.swift */,
+				09F7FBEF72B1F403289EED32 /* FocusRing.swift */,
+				A0DFA02031D0856B0CEB9656 /* GooseAgentApp.swift */,
+				0025534BB4835BD94F3EAAD7 /* Info.plist */,
+				A1244C5780C2545B4A1A6EC3 /* NotificationManager.swift */,
+				E2A37DF529D06B06944D4383 /* SearchView.swift */,
+				490C5502F40B0CD714744DE1 /* SidebarSection.swift */,
+				6BDD68618550AFA8888C0916 /* SidebarView.swift */,
+				61101261D68C9042BCCFE177 /* SpaceRowDrag.swift */,
+				FCD73906300DC1BA152C6409 /* SplitContainer.swift */,
+				5E0E96F4DFCA8D83E9398959 /* TerminalColorFilter.swift */,
+				42F4ECCF2EE9440945B51A18 /* TerminalProcess.swift */,
+				C5743D33617E2DB7CD44D219 /* TerminalView.swift */,
+				159198DD38609F259A454DA8 /* Theme.swift */,
+			);
+			name = GooseAgent;
+			path = Sources/GooseAgent;
+			sourceTree = "<group>";
+		};
+		9C18167C08867B9F95F72C6C /* AgentIcons */ = {
+			isa = PBXGroup;
+			children = (
+				93B839FE04F4F28F38ACD196 /* amp-color.svg */,
+				E0D3DB97C21C84C4E7D29FF0 /* amp.svg */,
+				E3C6580B5727857663682E5E /* claude-color.svg */,
+				8BCC63B7EEA3065CF1E2B7F0 /* claude.svg */,
+				B76377E1421736710A04BA6E /* cline.svg */,
+				C14464C61F909AFF06F748E9 /* codex-color.svg */,
+				80CD6F66C5C92A2050A7022A /* codex.svg */,
+				6585CE2E3E5F326E02604218 /* copilot-color.svg */,
+				E2CD7D0DD6A05AD4CFDCDA79 /* copilot.svg */,
+				E9A61CC5F39F74C0745D976D /* cursor.svg */,
+				953E2AB183C7C3E2618E6E8B /* deepseek-color.svg */,
+				167CCABCC67A0D806AFB7798 /* deepseek.svg */,
+				FC46DDDA77CFED26DAC9AF84 /* devin-color.svg */,
+				5D00FF1D7FF01EC2FA0C7EC9 /* devin.svg */,
+				54492E116C2AFFA7E4542E86 /* gemini.svg */,
+				B20E437AA6776B42F13C0256 /* githubcopilot.svg */,
+				0C75BF1A91360DCB5AB6E1CA /* grok.svg */,
+				6599A317503E6C37E23289C1 /* kimi-color.svg */,
+				789246C5538DABCA14EEB1F7 /* kimi.svg */,
+				188576E989F057FE2D506030 /* kiro-color.svg */,
+				D4EED65EAC7E64E26F565723 /* kiro.svg */,
+				D0EACC72F6F0F82D73AE7C9D /* moonshot.svg */,
+				B26FCC3F202B1D826DE13253 /* openai.svg */,
+				D930F4A0E1C79E1F997D3A07 /* opencode.svg */,
+				A9137ED87694F0AB6056F40A /* pi.svg */,
+				E4C7118EF10E5CF231ECA9E5 /* qwen-color.svg */,
+				1A74755801354B09B6BF9731 /* qwen.svg */,
+			);
+			path = AgentIcons;
+			sourceTree = "<group>";
+		};
+		BC5DB25BF4FDE47983A4380C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				75E79B1392983D37150864D0 /* GooseAgent.app */,
+				5FF88ECFFF5966FA3BF25AA0 /* GooseAgentMobile.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E517433ABA1F43A1FF076848 /* GooseAgentMobile */ = {
+			isa = PBXGroup;
+			children = (
+				B36C14137E05AFC80A635CC7 /* DeviceKey.swift */,
+				ACBE474403E023855AC83637 /* GooseAgentMobileApp.swift */,
+				5718FA9FC25673D149EE9B9B /* Info.plist */,
+				52CA4C65BCBD5D8AA67648F2 /* MobileAppModel.swift */,
+				6FA547EDBB7C5AD4B137CE1E /* MobileDevice.swift */,
+				5B5611BA58FDCD86538240AA /* MobileRootView.swift */,
+				40CC6DBB5F02048F1EF6774F /* MobileTerminalView.swift */,
+				5C01D92FF039BA296443340B /* MobileTransport.swift */,
+			);
+			name = GooseAgentMobile;
+			path = Sources/GooseAgentMobile;
+			sourceTree = "<group>";
+		};
+		E5A42FA4BD13D3AA5E217936 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				47B3F61C3D9E8B2B7AE7A141 /* SymbolsNerdFont-LICENSE.txt */,
+				56C06A7249F347CDEF660760 /* SymbolsNerdFontMono-Regular.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		E9428BCD55A0DD2D52D8A75A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				72C4468DFABCE812360B4E91 /* Localizable.xcstrings */,
+				9C18167C08867B9F95F72C6C /* AgentIcons */,
+				03572F915F58E27514FA3790 /* AppIcon */,
+				E5A42FA4BD13D3AA5E217936 /* Fonts */,
+				85071FB04724F297F1FF9E9B /* OSIcons */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		93B2F0FFCD933D1D0E4962B1 /* GooseAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ED7A320B0F81A52772949B89 /* Build configuration list for PBXNativeTarget "GooseAgent" */;
+			buildPhases = (
+				D5499441DE41DF73EE95A403 /* Sources */,
+				3E3585448AD547865812EC52 /* Resources */,
+				2037441FB45E0DD08282E63C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GooseAgent;
+			packageProductDependencies = (
+				48ECCC2444EB3E3575FD6B6D /* HerdrKit */,
+				A0D03B3E1623428777A38FD7 /* HerdrTailcat */,
+				5862B6EF6B0151336816D4AA /* GhosttyTerminal */,
+			);
+			productName = GooseAgent;
+			productReference = 75E79B1392983D37150864D0 /* GooseAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
+		EF6FBEBBA1B400306D0A8B40 /* GooseAgentMobile */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2BB418958B0F26E15E44EF6F /* Build configuration list for PBXNativeTarget "GooseAgentMobile" */;
+			buildPhases = (
+				00256120C5246BE23DF49E73 /* Sources */,
+				E48A102E257D2FB8DF1D9B53 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GooseAgentMobile;
+			packageProductDependencies = (
+				1FD4EE554AC5A96C46CEDD38 /* HerdrKit */,
+				3482681EFD0E64BA6FC21FA1 /* HerdrSSH */,
+				AFFFB7D6B5583EAFA173ABDC /* HerdrTailcat */,
+				2867FDF7C3EF7180738D6F83 /* GhosttyTerminal */,
+			);
+			productName = GooseAgentMobile;
+			productReference = 5FF88ECFFF5966FA3BF25AA0 /* GooseAgentMobile.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		70B98001DACE1FBBA1CAE30F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					93B2F0FFCD933D1D0E4962B1 = {
+						DevelopmentTeam = NCFNX3LJ83;
+						ProvisioningStyle = Manual;
+					};
+					EF6FBEBBA1B400306D0A8B40 = {
+						DevelopmentTeam = NCFNX3LJ83;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 95A71ACAEDE57DC6AFF2C390 /* Build configuration list for PBXProject "GooseHerdr" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 1F1AA3D4E84CF591A0C457BA;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				11F9102668D11947D3B0EB82 /* XCRemoteSwiftPackageReference "libghostty-spm" */,
+				BAA64DF8184E64ED4AC0F9C2 /* XCLocalSwiftPackageReference "Packages/HerdrKit" */,
+				25C0BC08C9550F633C538FED /* XCLocalSwiftPackageReference "Packages/HerdrSSH" */,
+				C72D0FBD265FF4C54437C769 /* XCLocalSwiftPackageReference "Packages/HerdrTailcat" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = BC5DB25BF4FDE47983A4380C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				93B2F0FFCD933D1D0E4962B1 /* GooseAgent */,
+				EF6FBEBBA1B400306D0A8B40 /* GooseAgentMobile */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3E3585448AD547865812EC52 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				24133119D69052C790F42D6E /* AppIcon.icon in Resources */,
+				0C81EC00775EB5F805FA8A9B /* Assets.xcassets in Resources */,
+				157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */,
+				FE157D7275F385DD6FA522DE /* SymbolsNerdFont-LICENSE.txt in Resources */,
+				8E7B62F6F5072CAED94E1381 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
+				744E7514D2D52623496AE761 /* alpinelinux.svg in Resources */,
+				FC950F7702CD2098EE70920A /* amp-color.svg in Resources */,
+				DE13A3CEDFA483F4D62F840A /* amp.svg in Resources */,
+				F11D93A42F4A20C50E5265D1 /* apple.svg in Resources */,
+				4D556AA90C463E37044B1134 /* archlinux.svg in Resources */,
+				D86ABEB0A19BF87AA1FC0D4E /* centos.svg in Resources */,
+				BCB2E3576BE5B2DE00A29019 /* claude-color.svg in Resources */,
+				EFA1B5E256377B0EFFB677D2 /* claude.svg in Resources */,
+				502BAAA433985EBF2EE13A0C /* cline.svg in Resources */,
+				3F938B7422ED0232CEFE3EDD /* codex-color.svg in Resources */,
+				A87674FE77146575EF180FCF /* codex.svg in Resources */,
+				D05023A686891E399E538B84 /* copilot-color.svg in Resources */,
+				F1088F539AB0993B9F248AE6 /* copilot.svg in Resources */,
+				84F4D29BA2CDE6D2D6975719 /* cursor.svg in Resources */,
+				C16974A6526928018632B690 /* debian.svg in Resources */,
+				D811FC5C2B35D82219C33A20 /* deepseek-color.svg in Resources */,
+				CBC810EA77B807BAD67329CE /* deepseek.svg in Resources */,
+				A06703FE9014C4ED50E30833 /* devin-color.svg in Resources */,
+				02C86337DF7E0E5E7EA1D2BA /* devin.svg in Resources */,
+				11DC94441DEF561728A6BA9E /* fedora.svg in Resources */,
+				E1B2C227F20CCA983AC4E235 /* freebsd.svg in Resources */,
+				F966A658ADEBB6FDF367AA41 /* gemini.svg in Resources */,
+				7044A9323285F62ADFD193BC /* githubcopilot.svg in Resources */,
+				76BE2266E485BB7130A34551 /* grok.svg in Resources */,
+				F67422A459B2F4E26FCB0F2C /* herdrm-icon-1024.png in Resources */,
+				B5AE5F815AF4F96E34331245 /* herdrm-icon-rounded.png in Resources */,
+				F169FD2CAF71DD4A45FA3D7E /* herdrm-icon.svg in Resources */,
+				B202FA6F3F6A6AD89338DBAB /* kimi-color.svg in Resources */,
+				157D542C417A15BAB15D4FE7 /* kimi.svg in Resources */,
+				E718892D4579CBFCE43610C2 /* kiro-color.svg in Resources */,
+				F776EC2328B8780AC9AB0732 /* kiro.svg in Resources */,
+				3EAFD2F9FFB04B698FC6AB87 /* linux.svg in Resources */,
+				D30369A345DB0F72B0D9B995 /* moonshot.svg in Resources */,
+				4ED832100998E75A96F6EA9A /* nixos.svg in Resources */,
+				6779761E8E122AC83D84D277 /* openai.svg in Resources */,
+				3EE7CBCD58EA4C61960474A2 /* opencode.svg in Resources */,
+				77A02AA72238BB49922D3F1C /* pi.svg in Resources */,
+				9545BBD0D5538EDF74B5CF2F /* qwen-color.svg in Resources */,
+				3020D3CDE7F8AA0D61E461F1 /* qwen.svg in Resources */,
+				2E1C027CF005EC87C2F2CB11 /* rockylinux.svg in Resources */,
+				3A380AACFB03B3907245B12C /* ubuntu.svg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		00256120C5246BE23DF49E73 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				57CE927F6C8EC3E88DD6A6D5 /* DeviceKey.swift in Sources */,
+				FA6D8BEC0C694078CC6E930F /* GooseAgentMobileApp.swift in Sources */,
+				D05BCC116BBEEDD5F29D8CE9 /* MobileAppModel.swift in Sources */,
+				D30FA8C4CB5D714957E5A2C1 /* MobileDevice.swift in Sources */,
+				3E706EF2D316723A60BAE7C2 /* MobileRootView.swift in Sources */,
+				7EC1E9C573429C26F60244ED /* MobileTerminalView.swift in Sources */,
+				620059A8C94ABE26D98C1524 /* MobileTransport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D5499441DE41DF73EE95A403 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				38160F631582B5624DD37274 /* AppLanguage.swift in Sources */,
+				7850A009F52431AE3FA7DC8E /* AppModel.swift in Sources */,
+				9A53F44122DD76711C3369D6 /* BrandIcon.swift in Sources */,
+				6780B0282F1DCE0127FBB959 /* ContentView.swift in Sources */,
+				D536BA63E42FC0EFEEB9E4B5 /* DeviceFilesView.swift in Sources */,
+				47ED40472F2336B0B526469E /* FocusRing.swift in Sources */,
+				339C4E11C5E5D1AD51B8E516 /* GooseAgentApp.swift in Sources */,
+				5A287607F4018DF2B8FB30FD /* NotificationManager.swift in Sources */,
+				20D6AE804E142787A0DCB8A0 /* SearchView.swift in Sources */,
+				975C9FF6FEFC8B8D4D2EC5B4 /* SidebarSection.swift in Sources */,
+				53B440919C3A4A2765B64EA9 /* SidebarView.swift in Sources */,
+				A9C305A9D4A6F6B584D453AF /* SpaceRowDrag.swift in Sources */,
+				2CA9C20DEA51AFB914D518AB /* SplitContainer.swift in Sources */,
+				4891D1E5EC60107DECA1285C /* TerminalColorFilter.swift in Sources */,
+				95AFA266AC36431D3F171E24 /* TerminalProcess.swift in Sources */,
+				1CF771238F5891EFCD8FAF3D /* TerminalView.swift in Sources */,
+				532BC9689DD6BC40FAE097ED /* Theme.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		517B9D65BC2B2A88B4B00FC7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = "arm64 x86_64";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Developer ID Application: MOE AI LLC (NCFNX3LJ83)";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NCFNX3LJ83;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Sources/GooseAgent/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.eachann.goose-herdr";
+				PRODUCT_NAME = "Goose Agent";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Release;
+		};
+		6AA6EE2BC8166094A5997B55 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "Developer ID Application: MOE AI LLC (NCFNX3LJ83)";
+				CODE_SIGN_STYLE = Manual;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NCFNX3LJ83;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = Sources/GooseAgent/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.eachann.goose-herdr";
+				PRODUCT_NAME = "Goose Agent";
+				SDKROOT = macosx;
+				SWIFT_VERSION = 5.10;
+			};
+			name = Debug;
+		};
+		8DAD388712C78E58061B7451 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NCFNX3LJ83;
+				EXCLUDED_ARCHS__sdk_iphonesimulator__ = x86_64;
+				INFOPLIST_FILE = Sources/GooseAgentMobile/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.eachann.goose-herdr.ios";
+				PRODUCT_NAME = "Goose Agent";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		971DC812A30B2DB1ACE301F1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NCFNX3LJ83;
+				EXCLUDED_ARCHS__sdk_iphonesimulator__ = x86_64;
+				INFOPLIST_FILE = Sources/GooseAgentMobile/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				ONLY_ACTIVE_ARCH = NO;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.eachann.goose-herdr.ios";
+				PRODUCT_NAME = "Goose Agent";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.10;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0D3908D4D8801DD8332C4D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		D77391E9697121A84FDF9219 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2BB418958B0F26E15E44EF6F /* Build configuration list for PBXNativeTarget "GooseAgentMobile" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				971DC812A30B2DB1ACE301F1 /* Debug */,
+				8DAD388712C78E58061B7451 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		95A71ACAEDE57DC6AFF2C390 /* Build configuration list for PBXProject "GooseHerdr" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0D3908D4D8801DD8332C4D2 /* Debug */,
+				D77391E9697121A84FDF9219 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		ED7A320B0F81A52772949B89 /* Build configuration list for PBXNativeTarget "GooseAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6AA6EE2BC8166094A5997B55 /* Debug */,
+				517B9D65BC2B2A88B4B00FC7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		25C0BC08C9550F633C538FED /* XCLocalSwiftPackageReference "Packages/HerdrSSH" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/HerdrSSH;
+		};
+		BAA64DF8184E64ED4AC0F9C2 /* XCLocalSwiftPackageReference "Packages/HerdrKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/HerdrKit;
+		};
+		C72D0FBD265FF4C54437C769 /* XCLocalSwiftPackageReference "Packages/HerdrTailcat" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/HerdrTailcat;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		11F9102668D11947D3B0EB82 /* XCRemoteSwiftPackageReference "libghostty-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Lakr233/libghostty-spm";
+			requirement = {
+				kind = exactVersion;
+				version = 1.6.20260909;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1FD4EE554AC5A96C46CEDD38 /* HerdrKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrKit;
+		};
+		2867FDF7C3EF7180738D6F83 /* GhosttyTerminal */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 11F9102668D11947D3B0EB82 /* XCRemoteSwiftPackageReference "libghostty-spm" */;
+			productName = GhosttyTerminal;
+		};
+		3482681EFD0E64BA6FC21FA1 /* HerdrSSH */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrSSH;
+		};
+		48ECCC2444EB3E3575FD6B6D /* HerdrKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrKit;
+		};
+		5862B6EF6B0151336816D4AA /* GhosttyTerminal */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 11F9102668D11947D3B0EB82 /* XCRemoteSwiftPackageReference "libghostty-spm" */;
+			productName = GhosttyTerminal;
+		};
+		A0D03B3E1623428777A38FD7 /* HerdrTailcat */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrTailcat;
+		};
+		AFFFB7D6B5583EAFA173ABDC /* HerdrTailcat */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HerdrTailcat;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 70B98001DACE1FBBA1CAE30F /* Project object */;
+}

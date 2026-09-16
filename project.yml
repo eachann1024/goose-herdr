@@ -84,7 +84,7 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     sources:
-      - Sources/GooseAgentobile
+      - Sources/GooseAgentMobile
     dependencies:
       - package: HerdrKit
       - package: HerdrSSH
