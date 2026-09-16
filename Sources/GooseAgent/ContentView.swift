@@ -626,7 +626,8 @@ struct DetailView: View {
                 mouseReporting: terminalMouseReporting,
                 onAttachmentError: { model.actionError = $0 },
                 onAttachmentUploadingChanged: { uploadingAttachment = $0 },
-                onExit: { code in endedAttach[session.id] = code }
+                onExit: { code in confirmAttachEnded(session, code: code) },
+                onFocus: { model.focusTerminalLeaf(session.id, group: session.id) }
             )
                 // Keyed on the retry generation only — NOT colorScheme. A theme toggle
                 // must re-theme live via updateNSView (as the split shell already does);
@@ -650,10 +651,23 @@ struct DetailView: View {
         .background(Theme.terminalBackground)
         .opacity(isSelected ? 1 : 0)
         .allowsHitTesting(isSelected)
+        .accessibilityHidden(!isSelected)
+    }
+
+    /// Wait for the snapshot before surfacing Reconnect. A normal close (Ctrl+D,
+    /// the far-end shell exiting) removes the pane; showing the overlay in that
+    /// gap is the flash the user sees. Takeover and a dropped SSH path leave the
+    /// pane in place, and that is the only case the overlay is for.
+    private func confirmAttachEnded(_ session: AppModel.AttachedEntry, code: Int32?) {
+        Task {
+            await model.refresh(session.device.id)
+            guard model.attachSessions.contains(where: { $0.id == session.id }) else { return }
+            endedAttach[session.id] = code
+        }
     }
 
     /// ssh exits 255 for transport failures; everything else is the far end closing
-    /// (takeover by another client, the pane going away, herdr stopping).
+    /// (takeover by another client, or herdr stopping while the pane remains).
     private func attachEndedOverlay(_ entry: AppModel.AttachedEntry) -> some View {
         let dropped = (endedAttach[entry.id] ?? nil) == 255
         return VStack(spacing: 10) {

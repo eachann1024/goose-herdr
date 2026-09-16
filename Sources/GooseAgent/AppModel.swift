@@ -1549,6 +1549,9 @@ final class AppModel: ObservableObject {
     private static let paneTopologyEventKinds: Set<String> = [
         "pane.created",
         "pane.closed",
+        // Shell exit (Ctrl+D) emits this before pane.closed; refresh immediately
+        // so the attach is dropped before a reconnect overlay can appear.
+        "pane.exited",
         "pane.moved",
         "pane.agent_detected",
     ]
