@@ -83,8 +83,8 @@ import Foundation
 import SwiftUI
 
 enum SidebarSectionID { static let spacesHiddenKey = "sidebar.spacesHidden" }
-struct PaneRef: Equatable { let deviceID: UUID; let paneID: String }
-struct SpaceRef: Equatable { let deviceID: UUID; let workspaceID: String }
+struct PaneRef: Hashable { let deviceID: UUID; let paneID: String }
+struct SpaceRef: Hashable { let deviceID: UUID; let workspaceID: String }
 struct Device: Equatable {
     let id: UUID
     let name: String
@@ -198,6 +198,29 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         assert(model.selectedSpace == SpaceRef(deviceID: local.id, workspaceID: "w2"), "space selection sticks")
         assert(model.isFileManagerActive == false, "space click leaves the Files page")
 
+        // Leaving a space remembers its last session as an id only; the old
+        // attach is dropped and coming back reloads that session.
+        let first = PaneRef(deviceID: local.id, paneID: "w1:p1")
+        let second = PaneRef(deviceID: local.id, paneID: "w1:p2")
+        let other = PaneRef(deviceID: local.id, paneID: "w2:p1")
+        model.panesByWorkspace = ["w1": [first, second], "w2": [other]]
+        model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
+        model.selectedPane = second
+        model.attachSessions = [AttachedStub(device: local, workspaceID: "w1")]
+        model.selectSpace(SpaceRef(deviceID: local.id, workspaceID: "w2"))
+        assert(model.selectedPane == other, "a new space falls back to its first visible session")
+        assert(!model.attachSessions.isEmpty, "leaving a space preserves live split PTYs")
+        assert(model.lastPaneBySpace[SpaceRef(deviceID: local.id, workspaceID: "w1")] == second)
+        model.selectSpace(SpaceRef(deviceID: local.id, workspaceID: "w1"))
+        assert(model.selectedPane == second, "returning restores the last session")
+        model.panesByWorkspace["w1"] = [first]
+        model.selectSpace(SpaceRef(deviceID: local.id, workspaceID: "w2"))
+        model.selectSpace(SpaceRef(deviceID: local.id, workspaceID: "w1"))
+        assert(model.selectedPane == first, "a missing last session falls back")
+        model.panesByWorkspace = [:]
+        model.lastPaneBySpace = [:]
+        model.attachSessions = []
+
         // Routing: current standalone shell first.
         model.selectedSpace = nil
         model.selectedPane = nil
@@ -294,7 +317,7 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
                "menus and help show the custom binding")
         store.removePersistentDomain(forName: suite)
         defaults.removeObject(forKey: SidebarSectionID.spacesHiddenKey)
-        print("PASS: hidden-space scope, filter-safe routing, shortcut boundaries")
+        print("PASS: hidden-space scope, last-session restore, filter-safe routing, shortcut boundaries")
     }
 }
 '''

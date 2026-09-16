@@ -863,18 +863,42 @@ final class AppModel: ObservableObject {
         devices.count > 1 && deviceFilter == nil
     }
 
+    /// Standalone shells, live panes, or spaces (including empty retained ones)
+    /// still on the sidebar. Last-window quit and ⌘W must not fire while this is true.
+    var hasKeepAliveWork: Bool {
+        if !shellSessions.isEmpty { return true }
+        if !retainedSpaces.isEmpty { return true }
+        return sessions.values.contains {
+            !$0.workspaces.isEmpty || !$0.agents.isEmpty || !$0.panes.isEmpty
+        }
+    }
+
     // MARK: - Selection
 
     func selectSpace(_ ref: SpaceRef?) {
         let ref = UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) ? nil : ref
         isFileManagerActive = false
+        if let space = selectedSpace, let pane = selectedPane {
+            lastPaneBySpace[space] = pane
+        }
         selectedSpace = ref
         selectedShellID = nil
         if let entry = selectedAttachedEntry {
             if ref == nil { return }
             if entry.device.id == ref!.deviceID && entry.workspaceID == ref!.workspaceID { return }
         }
+        if let remembered = rememberedVisiblePane(in: ref) {
+            selectedPane = remembered
+            return
+        }
         selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
+    }
+
+    /// Last pane left on this space, if it is still visible.
+    private func rememberedVisiblePane(in space: SpaceRef?) -> PaneRef? {
+        guard let space, let remembered = lastPaneBySpace[space] else { return nil }
+        let visible = Set(visibleSessions.map(\.ref))
+        return visible.contains(remembered) ? remembered : nil
     }
 
     func setDeviceFilter(_ id: UUID?) {
