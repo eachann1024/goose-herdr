@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02C86337DF7E0E5E7EA1D2BA /* devin.svg in Resources */ = {isa = PBXBuildFile; fileRef = 5D00FF1D7FF01EC2FA0C7EC9 /* devin.svg */; };
 		0C81EC00775EB5F805FA8A9B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 67AF5692D3507468CBB4629D /* Assets.xcassets */; };
+		0FD082AAB832B3BAE12A0B66 /* all-spaces.svg in Resources */ = {isa = PBXBuildFile; fileRef = C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */; };
 		11DC94441DEF561728A6BA9E /* fedora.svg in Resources */ = {isa = PBXBuildFile; fileRef = 1A71AF60D595A5A16AF7631B /* fedora.svg */; };
 		14D8D423703F80E20243711D /* HerdrSSH in Frameworks */ = {isa = PBXBuildFile; productRef = 3482681EFD0E64BA6FC21FA1 /* HerdrSSH */; };
 		157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 72C4468DFABCE812360B4E91 /* Localizable.xcstrings */; };
@@ -149,6 +150,7 @@
 		B8263284FF35B61A72A6E7E7 /* HerdrTailcat */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrTailcat; path = Packages/HerdrTailcat; sourceTree = SOURCE_ROOT; };
 		C11021DE4CAACE009A494C76 /* HerdrSSH */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HerdrSSH; path = Packages/HerdrSSH; sourceTree = SOURCE_ROOT; };
 		C14464C61F909AFF06F748E9 /* codex-color.svg */ = {isa = PBXFileReference; path = "codex-color.svg"; sourceTree = "<group>"; };
+		C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */ = {isa = PBXFileReference; path = "all-spaces.svg"; sourceTree = "<group>"; };
 		C5743D33617E2DB7CD44D219 /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		C62E9FA0ADE8F0873086AC01 /* herdrm-icon-rounded.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "herdrm-icon-rounded.png"; sourceTree = "<group>"; };
 		D0EACC72F6F0F82D73AE7C9D /* moonshot.svg */ = {isa = PBXFileReference; path = moonshot.svg; sourceTree = "<group>"; };
@@ -317,6 +319,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		CBF0304F2EF5893C2DD9AC3E /* SpaceIcons */ = {
+			isa = PBXGroup;
+			children = (
+				C33BFBA8DE64FB5BC016B96E /* all-spaces.svg */,
+			);
+			path = SpaceIcons;
+			sourceTree = "<group>";
+		};
 		E517433ABA1F43A1FF076848 /* GooseAgentMobile */ = {
 			isa = PBXGroup;
 			children = (
@@ -350,6 +360,7 @@
 				03572F915F58E27514FA3790 /* AppIcon */,
 				E5A42FA4BD13D3AA5E217936 /* Fonts */,
 				85071FB04724F297F1FF9E9B /* OSIcons */,
+				CBF0304F2EF5893C2DD9AC3E /* SpaceIcons */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -456,6 +467,7 @@
 				157C0A98F3E02BD71AFA09B7 /* Localizable.xcstrings in Resources */,
 				FE157D7275F385DD6FA522DE /* SymbolsNerdFont-LICENSE.txt in Resources */,
 				8E7B62F6F5072CAED94E1381 /* SymbolsNerdFontMono-Regular.ttf in Resources */,
+				0FD082AAB832B3BAE12A0B66 /* all-spaces.svg in Resources */,
 				744E7514D2D52623496AE761 /* alpinelinux.svg in Resources */,
 				FC950F7702CD2098EE70920A /* amp-color.svg in Resources */,
 				DE13A3CEDFA483F4D62F840A /* amp.svg in Resources */,

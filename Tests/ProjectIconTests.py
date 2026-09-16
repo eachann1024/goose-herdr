@@ -7,11 +7,12 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 sidebar = (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text()
 assert 'ProjectSpaceIcon(path: entry.device.isLocal ? model.spacePath(for: entry) : nil)' in sidebar
-assert 'SpaceIcon(systemName: "square.on.square")' in sidebar
-assert 'SpaceIcon(systemName: "square.stack", size: 14)' in sidebar
+assert 'SpaceIcon(systemName: "square", size: 12)' in sidebar
+assert 'BrandIcon(resource: "all-spaces", size: 14' in sidebar
 
 harness = r'''
 import Darwin
+import AppKit
 import Foundation
 import ImageIO
 
@@ -103,6 +104,8 @@ import ImageIO
             let invalid = await loader.image(for: path)
             assert(invalid == nil)
         }
+        let stack = NSImage(contentsOfFile: CommandLine.arguments[1] + "/Resources/SpaceIcons/all-spaces.svg")
+        assert(stack?.tiffRepresentation != nil, "custom stack must render natively")
         let actual = await loader.image(for: CommandLine.arguments[1])
         assert(actual != nil, "this app's real AppIcon must be discovered")
         print("Project icons: discovery, cache, fallback, bounds and path safety passed")

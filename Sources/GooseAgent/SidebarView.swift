@@ -257,8 +257,10 @@ struct SidebarView: View {
             model.selectSpace(nil)
         } label: {
             HStack(spacing: 8) {
-                SpaceIcon(systemName: "square.stack", size: 14)
+                BrandIcon(resource: "all-spaces", size: 14, fallbackSystemName: "square.stack")
+                    .frame(width: 20, height: 20)
                     .foregroundStyle(selected ? Theme.textSecondary : Theme.textTertiary)
+                    .accessibilityHidden(true)
                 Text("All Spaces")
                     .font(.system(size: 13))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
@@ -861,7 +863,7 @@ private struct ProjectSpaceIcon: View {
                     .frame(width: 14, height: 14)
                     .frame(width: 20, height: 20)
             } else {
-                SpaceIcon(systemName: "square.on.square")
+                SpaceIcon(systemName: "square", size: 12)
             }
         }
         .accessibilityHidden(true)
