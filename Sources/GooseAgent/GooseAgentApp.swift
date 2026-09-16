@@ -364,9 +364,11 @@ private struct OpenSettingsWindowButton: View {
 private struct AgentKindCommandItems: View {
     @ObservedObject var model: AppModel
     var focusedModel: AppModel?
+    @AppStorage(AgentKindDisabled.revisionKey) private var disabledRevision = 0
 
     private var kinds: [String] {
-        AgentKindOrder.sorted(model.session(Device.local.id).agentCatalog.kinds)
+        _ = disabledRevision
+        return AgentKindOrder.visibleSorted(model.session(Device.local.id).agentCatalog.kinds)
     }
 
     var body: some View {
@@ -553,8 +555,15 @@ struct SettingsView: View {
         if pane == .agents {
             // Keep the reorderable List bounded; never nest it in a ScrollView.
             VStack(alignment: .leading, spacing: 12) {
-                Text("Agent Applications").font(.system(size: 13, weight: .semibold))
-                    .padding(.horizontal, 10)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Agent Applications")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Only checked agents can have shortcuts and other settings.")
+                        .font(SettingsLayout.captionFont)
+                        .foregroundStyle(Theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
                 AgentsSettingsView(model: model)
                     .background(Theme.settingsGroup,
                                 in: RoundedRectangle(cornerRadius: SettingsLayout.cornerRadius))
@@ -716,13 +725,15 @@ private struct SettingsButtonStyle: ButtonStyle {
 struct ShortcutsSettingsView: View {
     @ObservedObject var model: AppModel
     @AppStorage(AppShortcuts.revisionKey) private var revision = 0
+    @AppStorage(AgentKindDisabled.revisionKey) private var disabledRevision = 0
     @State private var recordingGeneral: AppShortcutID?
     @State private var recordingAgent: String?
     @State private var monitor: Any?
     @State private var conflictText: String?
 
     private var localKinds: [String] {
-        AgentKindOrder.sorted(model.session(Device.local.id).agentCatalog.kinds)
+        _ = disabledRevision
+        return AgentKindOrder.visibleSorted(model.session(Device.local.id).agentCatalog.kinds)
     }
 
     private var localPaths: [String: String] {
@@ -923,6 +934,7 @@ struct ShortcutsSettingsView: View {
 struct AgentsSettingsView: View {
     @ObservedObject var model: AppModel
     @State private var drafts: [String: String] = AgentBinaryOverrides.load()
+    @State private var disabled: Set<String> = AgentKindDisabled.load()
     @State private var orderedRows: [KindRow] = []
 
     private struct KindRow: Identifiable, Equatable {
@@ -1020,34 +1032,44 @@ struct AgentsSettingsView: View {
             } else {
                 List {
                     ForEach(orderedRows) { row in
-                        HStack(spacing: 10) {
+                        HStack(alignment: .center, spacing: 8) {
+                            Toggle(isOn: enabledBinding(row.kind)) {
+                                Text("Enable \(row.label)")
+                            }
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(.tertiary)
                                 .frame(width: 12)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(row.label)
-                                    .font(SettingsLayout.bodyFont)
-                                    .foregroundStyle(.primary)
-                                TextField(
-                                    "",
-                                    text: binding(row.kind),
-                                    prompt: Text(shortPath(row.detectedPath) ?? String(localized: "Automatic"))
-                                )
-                                .font(SettingsLayout.captionFont.monospaced())
-                                .textFieldStyle(.plain)
-                                .padding(8)
-                                .background(Theme.settingsBackground, in: RoundedRectangle(cornerRadius: SettingsLayout.iconRadius))
-                                .accessibilityLabel(Text("Agent binary path"))
-                                .foregroundStyle(.secondary)
-                                .help(String(localized: "Command or path for \(row.hint). Leave empty to detect."))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Text(row.label)
+                                .font(SettingsLayout.bodyFont)
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                                .opacity(disabled.contains(row.kind) ? 0.45 : 1)
 
-
+                            TextField(
+                                "",
+                                text: binding(row.kind),
+                                prompt: Text(shortPath(row.detectedPath) ?? String(localized: "Automatic"))
+                            )
+                            .font(SettingsLayout.captionFont.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .opacity(disabled.contains(row.kind) ? 0.45 : 1)
+                            .accessibilityLabel(Text("Agent binary path"))
+                            .help(String(localized: "Command or path for \(row.hint). Leave empty to detect."))
+                            .focusEffectDisabled()
                         }
-                        .padding(.vertical, 4)
+                        .frame(height: SettingsLayout.rowHeight)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
                         .listRowBackground(Theme.settingsGroup)
                         .listRowSeparatorTint(Theme.hairline)
                     }
@@ -1055,7 +1077,7 @@ struct AgentsSettingsView: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .environment(\.defaultMinListRowHeight, 44)
+                .environment(\.defaultMinListRowHeight, SettingsLayout.rowHeight)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
@@ -1063,6 +1085,7 @@ struct AgentsSettingsView: View {
         .padding(.vertical, 4)
         .onAppear {
             drafts = AgentBinaryOverrides.load()
+            disabled = AgentKindDisabled.load()
             syncOrderedRows()
             // Refresh in background; syncOrderedRows ignores `.loading` so the list stays.
             model.reloadAgentCatalog(deviceID: Device.local.id)
@@ -1109,6 +1132,20 @@ struct AgentsSettingsView: View {
         Binding(
             get: { drafts[kind] ?? "" },
             set: { drafts[kind] = $0 }
+        )
+    }
+
+    private func enabledBinding(_ kind: String) -> Binding<Bool> {
+        Binding(
+            get: { !disabled.contains(kind) },
+            set: { isOn in
+                if isOn {
+                    disabled.remove(kind)
+                } else {
+                    disabled.insert(kind)
+                }
+                AgentKindDisabled.save(disabled)
+            }
         )
     }
 }

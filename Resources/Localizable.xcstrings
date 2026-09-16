@@ -3692,6 +3692,23 @@
         }
       }
     },
+    "Only checked agents can have shortcuts and other settings.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only checked agents can have shortcuts and other settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有勾选后才能设置快捷键和其他选项。"
+          }
+        }
+      }
+    },
     "Agent binary path": {
       "extractionState": "manual",
       "localizations": {
@@ -3705,6 +3722,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "Agent 程序路径"
+          }
+        }
+      }
+    },
+    "Enable %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用 %@"
           }
         }
       }

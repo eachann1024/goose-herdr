@@ -63,4 +63,34 @@ enum AgentKindOrder {
         }
         return result
     }
+
+    /// Settings list order minus kinds the user unchecked.
+    static func visibleSorted(_ kinds: [String], store: UserDefaults = .standard) -> [String] {
+        AgentKindDisabled.visible(sorted(kinds, store: store), store: store)
+    }
+}
+
+/// Kinds hidden from the Agent menu after the user unchecks them in Settings.
+enum AgentKindDisabled {
+    static let defaultsKey = "agents.disabledKinds"
+    static let revisionKey = "agents.disabledKinds.revision"
+
+    static func load(store: UserDefaults = .standard) -> Set<String> {
+        Set(store.stringArray(forKey: defaultsKey) ?? [])
+    }
+
+    static func save(_ kinds: Set<String>, store: UserDefaults = .standard) {
+        let values = kinds.sorted()
+        if values.isEmpty {
+            store.removeObject(forKey: defaultsKey)
+        } else {
+            store.set(values, forKey: defaultsKey)
+        }
+        store.set(store.integer(forKey: revisionKey) + 1, forKey: revisionKey)
+    }
+
+    static func visible(_ kinds: [String], store: UserDefaults = .standard) -> [String] {
+        let disabled = load(store: store)
+        return kinds.filter { !disabled.contains($0) }
+    }
 }
