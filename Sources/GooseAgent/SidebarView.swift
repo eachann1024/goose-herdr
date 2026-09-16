@@ -34,8 +34,12 @@ struct SidebarView: View {
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
     @AppStorage(SidebarSectionID.agentsHiddenKey) private var agentsHidden = false
     @AppStorage(SidebarSectionID.terminalsHiddenKey) private var terminalsHidden = false
-    @AppStorage(SidebarSectionID.actionsHiddenKey) private var actionsHidden = false
-    @State private var actionsHovered = false
+    @AppStorage(SidebarActionID.newAgent.hiddenKey) private var newAgentHidden = false
+    @AppStorage(SidebarActionID.newTerminal.hiddenKey) private var newTerminalHidden = false
+    @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
+    @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
+    @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
+    @State private var hoveredAction: SidebarActionID?
     @State private var headerHoveredSection: SidebarSectionID?
 
     var body: some View {
@@ -53,57 +57,30 @@ struct SidebarView: View {
 
             Spacer().frame(height: 8)
 
-            if !actionsHidden {
-                VStack(spacing: 1) {
-                    actionRow(icon: "square.and.pencil", label: "New Agent") {
-                        model.showNewAgent = true
-                    }
-                    // Terminals — herdr-owned or standalone — are listed under
-                    // TERMINALS below; the ⌘D split beside an agent is separate.
-                    actionRow(icon: "terminal", label: "New Terminal") {
-                        model.showNewTerminal = true
-                    }
-                    // Also reachable from the folder.badge.plus by the Spaces
-                    // header; promoted here alongside the other New … actions (#84).
-                    actionRow(icon: "folder.badge.plus", label: "New Space") {
-                        model.showNewSpace = true
-                    }
-                    actionRow(icon: "folder", label: "Files") {
-                        model.openFileManager()
-                    }
-                    actionRow(icon: "magnifyingglass", label: "Search") {
-                        model.showSearch = true
-                    }
+            VStack(spacing: 1) {
+                if !newAgentHidden {
+                    quickActionRow(.newAgent) { model.showNewAgent = true }
                 }
-                .padding(.horizontal, 10)
-                .overlay(alignment: .topTrailing) {
-                    if actionsHovered {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.15)) {
-                                hideSection(.actions)
-                            }
-                        } label: {
-                            Image(systemName: "eye.slash")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textGhost)
-                                .frame(width: 20, height: 20)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .focusEffectDisabled()
-                        .help(SidebarSectionID.actions.hideHelp)
+                // Terminals — herdr-owned or standalone — are listed under
+                // TERMINALS below; the ⌘D split beside an agent is separate.
+                if !newTerminalHidden {
+                    quickActionRow(.newTerminal) { model.showNewTerminal = true }
+                }
+                // Also reachable from the folder.badge.plus by the Spaces
+                // header; promoted here alongside the other New … actions (#84).
+                if !newSpaceHidden {
+                    quickActionRow(.newSpace) { model.showNewSpace = true }
+                }
+                if !filesHidden {
+                    quickActionRow(.files) { model.openFileManager() }
+                }
+                if !searchHidden {
+                    quickActionRow(.search) { model.showSearch = true }
+                }
+            }
+            .padding(.horizontal, 10)
 
-                        .transition(.opacity)
-                        .padding(.trailing, 10)
-                    }
-                }
-                .onHover { actionsHovered = $0 }
-                .contextMenu {
-                    Button(SidebarSectionID.actions.hideHelp) {
-                        hideSection(.actions)
-                    }
-                }
-
+            if !newAgentHidden || !newTerminalHidden || !newSpaceHidden || !filesHidden || !searchHidden {
                 Spacer().frame(height: 10)
             }
 
@@ -212,26 +189,52 @@ struct SidebarView: View {
 
     // MARK: - Rows
 
-    private func actionRow(icon: String, label: LocalizedStringKey, action: @escaping () -> Void) -> some View {
+    private func quickActionRow(_ id: SidebarActionID, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
+                Image(systemName: id.systemImage)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                     .frame(width: 20, height: 20)
-                Text(label)
+                Text(id.title)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textSecondary)
                 Spacer()
+                if hoveredAction == id {
+                    Image(systemName: "eye.slash")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textGhost)
+                        .frame(width: 20, height: 20)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                hideAction(id)
+                            }
+                        }
+                }
             }
             .padding(.horizontal, 4)
             .frame(height: 32)
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarRowButtonStyle())
-        // CSS `outline: none` is not a SwiftUI concept. This is the native
-        // equivalent for sidebar chrome; keyboard access remains available.
         .focusEffectDisabled()
+        .onHover { hovering in
+            hoveredAction = hovering ? id : (hoveredAction == id ? nil : hoveredAction)
+        }
+        .contextMenu {
+            Button(id.hideHelp) { hideAction(id) }
+        }
+        .help(id.title)
+    }
+
+    private func hideAction(_ id: SidebarActionID) {
+        switch id {
+        case .newAgent: newAgentHidden = true
+        case .newTerminal: newTerminalHidden = true
+        case .newSpace: newSpaceHidden = true
+        case .files: filesHidden = true
+        case .search: searchHidden = true
+        }
     }
 
     private func groupHeader(
@@ -308,7 +311,6 @@ struct SidebarView: View {
 
     private func hideSection(_ section: SidebarSectionID) {
         switch section {
-        case .actions: actionsHidden = true
         case .spaces: spacesHidden = true
         case .agents: agentsHidden = true
         case .terminals: terminalsHidden = true

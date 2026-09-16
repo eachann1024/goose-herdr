@@ -897,15 +897,16 @@ struct SheetHeader: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 }
 
 private enum SheetCardMetrics {
-    static let height: CGFloat = 82
-    static let cornerRadius: CGFloat = 12
-    static let iconSize: CGFloat = 23
+    static let height: CGFloat = 54
+    static let cornerRadius: CGFloat = 10
+    static let iconSize: CGFloat = 18
+    static let gridSpacing: CGFloat = 8
 }
 
 struct SheetSectionLabel: View {
@@ -948,11 +949,11 @@ struct SheetChoiceCard: View {
         Button(action: action) {
             VStack(spacing: 7) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 20, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(selected ? Theme.accent : Theme.textSecondary)
                     .frame(width: SheetCardMetrics.iconSize, height: SheetCardMetrics.iconSize)
                 Text(title)
-                    .font(.system(size: 12.5, weight: selected ? .medium : .regular))
+                    .font(.system(size: 11.5, weight: selected ? .medium : .regular))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -963,7 +964,7 @@ struct SheetChoiceCard: View {
                         .lineLimit(1)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity)
             .frame(height: SheetCardMetrics.height)
             .background(
@@ -1006,8 +1007,8 @@ struct NewSpaceSheet: View {
                 if model.showsDeviceBadges {
                     SheetSectionLabel("DEVICE")
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
                         ForEach(model.devices) { device in
                             SheetChoiceCard(
@@ -1037,7 +1038,7 @@ struct NewSpaceSheet: View {
                 TextField("Defaults to the folder name", text: $label)
                     .textFieldStyle(.roundedBorder)
             }
-            .padding(24)
+            .padding(16)
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
@@ -1056,10 +1057,10 @@ struct NewSpaceSheet: View {
                 .focusEffectDisabled()
                 .disabled(directory.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(width: 560)
+        .frame(width: 540)
         .herdrmHideFocusRing()
         .onAppear {
             deviceID = model.deviceFilter ?? model.devices.first?.id ?? Device.local.id
@@ -1300,8 +1301,8 @@ struct NewTerminalSheet: View {
                 if model.showsDeviceBadges {
                     SheetSectionLabel("DEVICE")
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
                         ForEach(model.devices) { device in
                             SheetChoiceCard(
@@ -1324,8 +1325,8 @@ struct NewTerminalSheet: View {
                 // or ssh) that needs no herdr on the device at all.
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
                         ForEach(spaces) { workspace in
                             SheetChoiceCard(
@@ -1346,14 +1347,14 @@ struct NewTerminalSheet: View {
                     }
                     .padding(1)
                 }
-                .frame(maxHeight: 196)
+                .frame(maxHeight: 280)
                 if isStandalone {
                     Text("Runs in this app only; closing Goose Agent ends the shell.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.textTertiary)
                 }
             }
-            .padding(24)
+            .padding(16)
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
@@ -1375,10 +1376,10 @@ struct NewTerminalSheet: View {
                 .keyboardShortcut(.defaultAction)
                 .focusEffectDisabled()
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(width: 560)
+        .frame(width: 540)
         .herdrmHideFocusRing()
         .onAppear {
             deviceID = model.selectedSpace?.deviceID
@@ -1415,7 +1416,7 @@ struct NewAgentSheet: View {
     }
 
     private var kinds: [String] {
-        session.agentCatalog.kinds
+        session.agentCatalog.kinds.filter { AgentKindVisibility.isEnabled($0) }
     }
 
     private var bypassFlags: [String]? {
@@ -1440,8 +1441,8 @@ struct NewAgentSheet: View {
                 if model.showsDeviceBadges {
                     SheetSectionLabel("DEVICE")
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
                         ForEach(model.devices) { device in
                             SheetChoiceCard(
@@ -1494,16 +1495,16 @@ struct NewAgentSheet: View {
                     case .loaded(let loadedKinds, let paths):
                         ScrollView {
                             LazyVGrid(
-                                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                                spacing: 12
+                                columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                                spacing: SheetCardMetrics.gridSpacing
                             ) {
-                                ForEach(loadedKinds, id: \.self) { name in
+                                ForEach(loadedKinds.filter { AgentKindVisibility.isEnabled($0) }, id: \.self) { name in
                                     kindCell(name, path: paths[name])
                                 }
                             }
                             .padding(1)
                         }
-                        .frame(maxHeight: 260)
+                        .frame(maxHeight: 400)
                     }
                 }
 
@@ -1512,8 +1513,8 @@ struct NewAgentSheet: View {
                 SheetSectionLabel("SPACE")
                 ScrollView {
                     LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3),
-                        spacing: 12
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
                         SheetChoiceCard(
                             title: String(localized: "Focused space"),
@@ -1534,7 +1535,7 @@ struct NewAgentSheet: View {
                     }
                     .padding(1)
                 }
-                .frame(maxHeight: 196)
+                .frame(maxHeight: 280)
 
                 // shown only for agents with a verified bypass flag
                 if let flags = bypassFlags {
@@ -1555,7 +1556,7 @@ struct NewAgentSheet: View {
                     .controlSize(.small)
                 }
             }
-            .padding(24)
+            .padding(16)
 
             Rectangle().fill(Theme.hairline).frame(height: 1)
 
@@ -1579,10 +1580,10 @@ struct NewAgentSheet: View {
                 .focusEffectDisabled()
                 .disabled(!kinds.contains(kind))
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
         }
-        .frame(width: 600)
+        .frame(width: 580)
         .herdrmHideFocusRing()
         .onAppear {
             deviceID = model.selectedSpace?.deviceID
@@ -1610,13 +1611,13 @@ struct NewAgentSheet: View {
                         BrandIcon(resource: resource, size: SheetCardMetrics.iconSize)
                     } else {
                         Image(systemName: "terminal")
-                            .font(.system(size: 20, weight: .medium))
+                            .font(.system(size: 16, weight: .medium))
                     }
                 }
                 .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                 .frame(width: SheetCardMetrics.iconSize, height: SheetCardMetrics.iconSize)
                 Text(name)
-                    .font(.system(size: 12.5, weight: selected ? .medium : .regular))
+                    .font(.system(size: 11.5, weight: selected ? .medium : .regular))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                     .lineLimit(1)
             }

@@ -246,7 +246,7 @@ struct SettingsView: View {
             AboutSettingsView()
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
-        .frame(width: 420)
+        .frame(width: 560, height: 520)
         .herdrmHideFocusRing()
     }
 }
@@ -254,6 +254,7 @@ struct SettingsView: View {
 struct AgentsSettingsView: View {
     var model: AppModel
     @State private var drafts: [String: String] = AgentBinaryOverrides.load()
+    @State private var kindVisibility: [String: Bool] = [:]
 
     /// Kinds the picker knows how to start. The lookup command is `kind`,
     /// except Cursor which installs as `cursor-agent`.
@@ -274,9 +275,15 @@ struct AgentsSettingsView: View {
         Form {
             Section {
                 ForEach(Self.kinds, id: \.kind) { row in
-                    TextField(row.label, text: binding(row.kind), prompt: Text("Automatic"))
-                        .font(.system(size: 12).monospaced())
-                        .help(String(localized: "Command or path for \(row.hint). Leave empty to detect."))
+                    HStack(spacing: 10) {
+                        TextField(row.label, text: binding(row.kind), prompt: Text("Automatic"))
+                            .font(.system(size: 12).monospaced())
+                            .help(String(localized: "Command or path for \(row.hint). Leave empty to detect."))
+                        Toggle("", isOn: visibilityBinding(row.kind))
+                            .toggleStyle(.checkbox)
+                            .labelsHidden()
+                            .help(String(localized: "Show in New Agent"))
+                    }
                 }
             } footer: {
                 Text("Finder-launched apps don’t inherit your terminal PATH. Goose Agent captures it once from a login + interactive shell, then looks up these names. A path here is an escape hatch when detection picks the wrong binary.")
@@ -284,9 +291,12 @@ struct AgentsSettingsView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(20)
+        .padding(24)
         .herdrmHideFocusRing()
-        .onAppear { drafts = AgentBinaryOverrides.load() }
+        .onAppear {
+            drafts = AgentBinaryOverrides.load()
+            kindVisibility = Dictionary(uniqueKeysWithValues: Self.kinds.map { ($0.kind, AgentKindVisibility.isEnabled($0.kind)) })
+        }
         .onChange(of: drafts) { _, _ in commit() }
         .onDisappear(perform: commit)
         .onSubmit(commit)
@@ -295,6 +305,16 @@ struct AgentsSettingsView: View {
     private func commit() {
         AgentBinaryOverrides.save(drafts)
         model.reloadAgentCatalog(deviceID: Device.local.id)
+    }
+
+    private func visibilityBinding(_ kind: String) -> Binding<Bool> {
+        Binding(
+            get: { kindVisibility[kind] ?? AgentKindVisibility.isEnabled(kind) },
+            set: { newValue in
+                kindVisibility[kind] = newValue
+                AgentKindVisibility.setEnabled(kind, newValue)
+            }
+        )
     }
 
     private func binding(_ kind: String) -> Binding<String> {
@@ -415,7 +435,11 @@ struct AppearanceSettingsView: View {
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
     @AppStorage(SidebarSectionID.agentsHiddenKey) private var agentsHidden = false
     @AppStorage(SidebarSectionID.terminalsHiddenKey) private var terminalsHidden = false
-    @AppStorage(SidebarSectionID.actionsHiddenKey) private var actionsHidden = false
+    @AppStorage(SidebarActionID.newAgent.hiddenKey) private var newAgentHidden = false
+    @AppStorage(SidebarActionID.newTerminal.hiddenKey) private var newTerminalHidden = false
+    @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
+    @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
+    @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
 
     var body: some View {
         Form {
@@ -437,37 +461,32 @@ struct AppearanceSettingsView: View {
             .onChange(of: language) { _, newValue in
                 AppLanguage.apply(AppLanguage(rawValue: newValue) ?? .system)
             }
-            // Changing AppleLanguages only takes effect on the next process start.
             Text("Changing language takes effect after you quit and reopen Goose Agent.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
 
             Divider()
 
+            Text("Quick Actions")
+                .font(.system(size: 12, weight: .medium))
+            Toggle("New Agent", isOn: Binding(get: { !newAgentHidden }, set: { newAgentHidden = !$0 }))
+            Toggle("New Terminal", isOn: Binding(get: { !newTerminalHidden }, set: { newTerminalHidden = !$0 }))
+            Toggle("New Space", isOn: Binding(get: { !newSpaceHidden }, set: { newSpaceHidden = !$0 }))
+            Toggle("Files", isOn: Binding(get: { !filesHidden }, set: { filesHidden = !$0 }))
+            Toggle("Search", isOn: Binding(get: { !searchHidden }, set: { searchHidden = !$0 }))
+
+            Divider()
+
             Text("Sidebar Sections")
                 .font(.system(size: 12, weight: .medium))
-            // Inverted toggles: ON means the section is visible.
-            Toggle("Actions", isOn: Binding(
-                get: { !actionsHidden },
-                set: { actionsHidden = !$0 }
-            ))
-            Toggle("Spaces", isOn: Binding(
-                get: { !spacesHidden },
-                set: { spacesHidden = !$0 }
-            ))
-            Toggle("Agents", isOn: Binding(
-                get: { !agentsHidden },
-                set: { agentsHidden = !$0 }
-            ))
-            Toggle("Terminals", isOn: Binding(
-                get: { !terminalsHidden },
-                set: { terminalsHidden = !$0 }
-            ))
-            Text("Hidden sections stay out of the sidebar until you show them again from Settings.")
+            Toggle("Spaces", isOn: Binding(get: { !spacesHidden }, set: { spacesHidden = !$0 }))
+            Toggle("Agents", isOn: Binding(get: { !agentsHidden }, set: { agentsHidden = !$0 }))
+            Toggle("Terminals", isOn: Binding(get: { !terminalsHidden }, set: { terminalsHidden = !$0 }))
+            Text("Turn items off one by one. Show them again here.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
-        .padding(20)
+        .padding(24)
         .herdrmHideFocusRing()
     }
 }
