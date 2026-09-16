@@ -698,6 +698,7 @@ private struct SettingsMenu<Content: View>: View {
             .frame(minHeight: 28)
         }
         .menuStyle(.button)
+        .pickerStyle(.inline)
         .buttonStyle(.plain)
         .tint(Theme.text)
         .menuIndicator(.hidden)
