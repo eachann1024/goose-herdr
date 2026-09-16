@@ -40,8 +40,8 @@ public enum AgentUnread: Sendable {
     /// `previous` map and must not create unread flags.
     ///
     /// Finishing while the pane is selected still counts as unread; the GUI
-    /// clears the flag when the user *leaves* that row, not when they happen
-    /// to be sitting on it as the turn ends.
+    /// clears the flag when the user opens, reselects, or leaves that row,
+    /// not merely because they happen to be sitting on it as the turn ends.
     public static func applying(
         previous: [String: AgentStatus],
         agents: [AgentInfo],

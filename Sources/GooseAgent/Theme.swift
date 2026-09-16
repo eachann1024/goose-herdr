@@ -42,6 +42,16 @@ enum Theme {
     static let sidebarBorder = dynamic(hex(0xD9D9D9), hex(0x292929))
     static let hairline = dynamic(hex(0x000000, alpha: 0.08), hex(0xFFFFFF, alpha: 0.06))
 
+    // Settings surfaces match the reference without changing the console theme.
+    static let settingsBackground = dynamic(hex(0xFFFFFF), hex(0x1E1E1E))
+    static let settingsSidebar = dynamic(hex(0xEDEDED), hex(0x282828))
+    static let settingsGroup = dynamic(hex(0xF7F7F7), hex(0x303030))
+    static let settingsSelection = dynamic(hex(0xDCDCDC), hex(0x414141))
+    static let settingsControl = dynamic(hex(0xEAEAEA), hex(0x414141))
+    static let settingsControlShadow = dynamic(hex(0x000000, alpha: 0.12), hex(0x000000, alpha: 0.3))
+    static let settingsAccent = Color(nsColor: .systemBlue)
+    static let settingsIconForeground = Color.white
+
     /// Distinct tints for device chips (deliberately avoids the status colors).
     static let devicePalette: [Color] = [
         dynamic(hex(0x7C3AED), hex(0x8B5CF6)),  // violet

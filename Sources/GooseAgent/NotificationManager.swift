@@ -75,7 +75,7 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         DispatchQueue.main.async { [weak self] in
             NSApp.activate(ignoringOtherApps: true)
             guard let model = self?.model, let paneID, let deviceID else { return }
-            model.reveal(PaneRef(deviceID: deviceID, paneID: paneID))
+            model.reveal(PaneRef(deviceID: deviceID, paneID: paneID), preservingSpaceScope: true)
         }
         completionHandler()
     }

@@ -13,10 +13,10 @@ import SwiftUI
 //    RootView, each sheet root, Settings, and key card buttons so descendant
 //    SwiftUI focus effects stay off where that API works.
 // 2. AppKit: on launch, swizzle `NSView.viewDidMoveToWindow` so newly attached
-//    chrome controls get `focusRingType = .none` (and their cell). Also strip
-//    existing trees when any window becomes key (sheets / Settings appear late).
-// 3. Typing is preserved: NSTextField / NSSecureTextField / NSTextView are skipped
-//    so the caret and text focus remain usable. Keyboard shortcuts are untouched.
+//    views get `focusRingType = .none` (and their cell). Also strip existing
+//    trees when any window becomes key (sheets / Settings appear late).
+// 3. Editing is preserved: disabling the decorative focus ring does not disable
+//    first-responder focus, caret interaction, or keyboard equivalents.
 
 /// Disables SwiftUI focus-effect chrome without affecting key equivalents.
 extension View {
@@ -75,29 +75,14 @@ enum HerdrFocusRing {
     }
 
     static func stripIfNeeded(_ view: NSView) {
-        guard shouldHideFocusRing(for: view) else { return }
         if view.focusRingType != .none {
             view.focusRingType = .none
         }
-        if let control = view as? NSControl, control.cell?.focusRingType != .none {
+        if let control = view as? NSControl, let cell = control.cell, cell.focusRingType != .none {
             control.cell?.focusRingType = .none
         }
     }
 
-    /// Chrome yes; typing fields no.
-    static func shouldHideFocusRing(for view: NSView) -> Bool {
-        if view is NSTextView { return false }
-        if view is NSTextField { return false } // includes NSSecureTextField / NSComboBox
-        if view is NSButton { return true }
-        if view is NSPopUpButton { return true }
-        if view is NSSegmentedControl { return true }
-        if view is NSSlider { return true }
-        if view is NSColorWell { return true }
-        if #available(macOS 14.0, *), view is NSSwitch { return true }
-        // Other NSControls (steppers, etc.) still draw a blue ring; skip pure containers.
-        if view is NSControl { return true }
-        return false
-    }
 }
 
 // MARK: - NSView swizzle
