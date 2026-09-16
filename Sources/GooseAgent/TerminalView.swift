@@ -1062,9 +1062,12 @@ enum ShellViewRegistry {
 }
 
 struct ShellTerminalView: NSViewRepresentable {
-    /// Session identity for the registry; nil for the ⌘D split shell.
+    /// Stable registry identity for standalone and split shells.
     var sessionID: UUID?
     var device: Device = .local
+    /// Startup directory for the shell this spawns; nil uses the transport's own
+    /// default (a login shell in $HOME for local, the remote default for SSH).
+    var workingDirectory: String? = nil
     var fontName: String = ""
     var fontSize: Double = TerminalDefaults.defaultFontSize
     var thinStrokes: Bool = true
@@ -1104,7 +1107,7 @@ struct ShellTerminalView: NSViewRepresentable {
         )
 
         let command = HerdrService(device: device, autoStartLocalServer: false)
-            .terminalCommand()
+            .terminalCommand(workingDirectory: workingDirectory)
         context.coordinator.authorizationID = command.authorizationID
         context.coordinator.scheduleAuthorizationCleanup()
         host.start(command: command)

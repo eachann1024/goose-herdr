@@ -82,6 +82,23 @@ final class TerminalProcess: @unchecked Sendable {
         return true
     }
 
+    /// Read the owned login shell at split time. Never infer a cwd from prompt
+    /// text, a foreground subprocess, or a remote attach client's local process.
+    var currentWorkingDirectory: String? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard shellPid > 0 else { return nil }
+        var info = proc_vnodepathinfo()
+        let size = MemoryLayout<proc_vnodepathinfo>.size
+        guard proc_pidinfo(shellPid, PROC_PIDVNODEPATHINFO, 0, &info, Int32(size)) == size else { return nil }
+        return withUnsafePointer(to: &info.pvi_cdir.vip_path) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                let path = String(cString: $0)
+                return path.hasPrefix("/") ? path : nil
+            }
+        }
+    }
+
     /// Queues bytes for the child. Never blocks the caller.
     func write(_ data: Data) {
         writeQueue.async { [weak self] in

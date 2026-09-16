@@ -531,7 +531,11 @@ public actor HerdrService {
     // MARK: - Terminal attach
 
     /// The command for a standalone interactive shell on this device.
-    public nonisolated func terminalCommand() -> TerminalCommand {
+    ///
+    /// `workingDirectory` only reaches the local shell: the SSH and tailcat
+    /// transports run on the other machine, and a caller's path names a
+    /// directory on this one. Pass nil to keep the login directory.
+    public nonisolated func terminalCommand(workingDirectory: String? = nil) -> TerminalCommand {
         switch device.kind {
         case .tailcat:
             // The tunnel carries only the herdr socket; there is no shell on
@@ -543,9 +547,10 @@ public actor HerdrService {
                 authorizationID: nil
             )
         case .local:
+            let start = Self.shellStartPrelude(workingDirectory: workingDirectory)
             return TerminalCommand(
                 executable: "/bin/sh",
-                args: ["-c", "cd \"$HOME\"; exec \"${SHELL:-/bin/zsh}\" -l"],
+                args: ["-c", "\(start); exec \"${SHELL:-/bin/zsh}\" -l"],
                 environment: [:],
                 authorizationID: nil
             )
@@ -574,6 +579,19 @@ public actor HerdrService {
                 authorizationID: authentication.authorizationID
             )
         }
+    }
+
+    /// `/bin/sh -c` fragment that puts the local shell in `workingDirectory`.
+    ///
+    /// An unusable path must not cost the user a shell, so $HOME is the floor —
+    /// including when the directory has been deleted since it was reported.
+    static func shellStartPrelude(workingDirectory: String?) -> String {
+        guard let workingDirectory, !workingDirectory.isEmpty else { return "cd \"$HOME\"" }
+        // Single-quote the path so it stays one literal argument. Both shells this
+        // drives are POSIX, so closing, escaping and reopening the quote is the
+        // whole rule — no metacharacter, space or CJK byte survives it.
+        let quoted = "'" + workingDirectory.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        return "cd \(quoted) 2>/dev/null || cd \"$HOME\""
     }
 
     /// Shell fragment that picks the herdr binary to attach with. herdr's attach
