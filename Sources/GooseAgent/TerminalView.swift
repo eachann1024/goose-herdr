@@ -281,6 +281,8 @@ final class TerminalProcessHost {
 
     /// Called on the main queue with the child's real exit status.
     var onExit: ((Int32?) -> Void)?
+    /// Main-queue signal: output has been delivered to the in-memory renderer.
+    private(set) var hasReceivedOutput = false
 
     init() {
         let process = self.process
@@ -338,6 +340,9 @@ final class TerminalProcessHost {
         } else {
             session.receive(data)
         }
+        DispatchQueue.main.async { [weak self] in
+            self?.hasReceivedOutput = true
+        }
     }
 }
 
@@ -384,7 +389,9 @@ private enum ClipboardFileError: LocalizedError {
 /// PTY while `hasMarkedText()`.
 final class LineBreakTerminalView: AppTerminalView {
     var onFocus: (() -> Void)?
+    var inputSuppressed = false
     override func becomeFirstResponder() -> Bool {
+        guard !inputSuppressed else { return false }
         let accepted = super.becomeFirstResponder()
         if accepted { onFocus?() }
         return accepted
@@ -915,6 +922,7 @@ struct AttachTerminalView: NSViewRepresentable {
     /// keystroke, which reads as a freeze.
     var onExit: ((Int32?) -> Void)? = nil
     var onFocus: (() -> Void)? = nil
+    var inputSuppressed = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 

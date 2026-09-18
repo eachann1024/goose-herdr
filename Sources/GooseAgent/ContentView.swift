@@ -43,15 +43,42 @@ struct RootView: View {
                     )
             }
         }
+        .overlayPreferenceValue(PiLaunchOriginKey.self) { anchor in
+            if let launch = model.piLaunch, model.showsPiLaunch {
+                GeometryReader { geometry in
+                    let leading: CGFloat = sidebarCollapsed ? 0 : 261
+                    let top = TitlebarMetrics.height + 1
+                    PiLaunchInkView(
+                        model: model,
+                        launchID: launch.id,
+                        origin: CGPoint(
+                            x: 0,
+                            y: anchor.map { min(max(geometry[$0].minY + 16 - top, 0), geometry.size.height - top) }
+                                ?? (geometry.size.height - top) / 2
+                        )
+                    )
+                    .frame(width: max(0, geometry.size.width - leading), height: max(0, geometry.size.height - top))
+                    .offset(x: leading, y: top)
+                    .id(launch.id)
+                }
+            }
+        }
+        .overlayPreferenceValue(TooltipRequestKey.self) { request in
+            if let request {
+                TooltipLayer(request: request)
+            }
+        }
         .animation(.spring(response: 0.25, dampingFraction: 0.85), value: model.showDevicePanel)
         .background(
             Button("") { sidebarCollapsed.toggle() }
-                .keyboardShortcut("b", modifiers: .command)
+                .keyboardShortcut(AppShortcuts.chord(for: .toggleSidebar).keyEquivalent,
+                                  modifiers: AppShortcuts.chord(for: .toggleSidebar).modifiers)
                 .hidden()
         )
         .background(
             Button("") { model.showSearch = true }
-                .keyboardShortcut("k", modifiers: .command)
+                .keyboardShortcut(AppShortcuts.chord(for: .search).keyEquivalent,
+                                  modifiers: AppShortcuts.chord(for: .search).modifiers)
                 .hidden()
         )
         .focusedSceneValue(\.appModel, model)
@@ -336,6 +363,9 @@ struct DetailView: View {
                 .clipped()
                 .opacity(model.isFileManagerActive ? 0 : 1)
                 .allowsHitTesting(!model.isFileManagerActive)
+            if model.showsPiLaunch, model.piLaunch?.revealed != true {
+                PiLoadingView(model: model)
+            }
             if hasOpenedFileManager {
                 DeviceFilesView(model: model)
                     .opacity(model.isFileManagerActive ? 1 : 0)
@@ -353,7 +383,7 @@ struct DetailView: View {
         HStack(spacing: 8) {
             if sidebarCollapsed {
                 Spacer().frame(width: TitlebarMetrics.trafficLightClearance - 10)
-                TitlebarIconButton(systemName: "sidebar.left", help: "Show Sidebar (⌘B)") {
+                TitlebarIconButton(systemName: "sidebar.left", title: "Show Sidebar", shortcut: .toggleSidebar) {
                     sidebarCollapsed = false
                 }
             }
@@ -363,6 +393,11 @@ struct DetailView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Theme.textTertiary)
                     Text("Files")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                } else if model.showsPiLaunch {
+                    Text(verbatim: "Pi")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.text)
                     Spacer()
@@ -632,7 +667,8 @@ struct DetailView: View {
                 onAttachmentError: { model.actionError = $0 },
                 onAttachmentUploadingChanged: { uploadingAttachment = $0 },
                 onExit: { code in confirmAttachEnded(session, code: code) },
-                onFocus: { model.focusTerminalLeaf(session.id, group: session.id) }
+                onFocus: { model.focusTerminalLeaf(session.id, group: session.id) },
+                inputSuppressed: model.showsPiLaunch && model.piLaunch?.pane == session.ref
             )
                 // Keyed on the retry generation only — NOT colorScheme. A theme toggle
                 // must re-theme live via updateNSView (as the split shell already does);
@@ -655,8 +691,8 @@ struct DetailView: View {
         // against, matching the pre-keep-alive single-view rendering.
         .background(Theme.terminalBackground)
         .opacity(isSelected ? 1 : 0)
-        .allowsHitTesting(isSelected)
-        .accessibilityHidden(!isSelected)
+        .allowsHitTesting(isSelected && !model.showsPiLaunch)
+        .accessibilityHidden(!isSelected || model.showsPiLaunch)
     }
 
     /// Wait for the snapshot before surfacing Reconnect. A normal close (Ctrl+D,
