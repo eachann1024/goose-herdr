@@ -392,9 +392,11 @@ struct GooseAgentApp: App {
 /// Opens the custom Settings window (⌘, / menu / sidebar gear).
 private struct OpenSettingsWindowButton: View {
     @Environment(\.openWindow) private var openWindow
+    @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
 
     var body: some View {
-        Button(String(localized: "Settings…")) {
+        let _ = shortcutsRevision  // the menu key equivalent follows a remap
+        return Button(String(localized: "Settings…")) {
             openWindow(id: "settings")
             // Bring to front if already open.
             DispatchQueue.main.async {
@@ -403,10 +405,31 @@ private struct OpenSettingsWindowButton: View {
                 }
             }
         }
-        .keyboardShortcut(",", modifiers: .command)
+        .keyboardShortcut(AppShortcuts.chord(for: .settings).keyEquivalent,
+                          modifiers: AppShortcuts.chord(for: .settings).modifiers)
     }
 }
 
+
+/// Display name for an agent kind; an unknown kind falls back to its own name.
+enum AgentKindLabel {
+    static func display(_ kind: String) -> String {
+        switch kind {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        case "cursor": return "Cursor"
+        case "gemini": return "Gemini"
+        case "grok": return "Grok"
+        case "hermes": return "Hermes"
+        case "kimi": return "Kimi"
+        case "opencode": return "OpenCode"
+        case "pi": return "Pi"
+        case "omp": return "Oh My Pi"
+        case "copilot": return "Copilot"
+        default: return kind.capitalized
+        }
+    }
+}
 
 /// Menu rows for per-kind agent shortcuts (only bound kinds get a key equivalent).
 private struct AgentKindCommandItems: View {
@@ -762,6 +785,7 @@ struct ShortcutsSettingsView: View {
     @State private var recordingAgent: String?
     @State private var monitor: Any?
     @State private var conflictText: String?
+    @State private var advancedExpanded = false
 
     private var localKinds: [String] {
         _ = disabledRevision
@@ -778,8 +802,13 @@ struct ShortcutsSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SettingsLayout.sectionSpacing) {
             SettingsSection(title: "General") {
-                ForEach(AppShortcutID.allCases) { id in
-                    generalRow(id)
+                ForEach(AppShortcutID.primaryCases) { id in
+                    generalRow(id, first: AppShortcutID.primaryCases.first)
+                }
+            }
+            SettingsSection(title: "Advanced", expanded: $advancedExpanded) {
+                ForEach(AppShortcutID.advancedCases) { id in
+                    generalRow(id, first: AppShortcutID.advancedCases.first)
                 }
             }
             SettingsSection(title: "Agent") {
@@ -812,8 +841,8 @@ struct ShortcutsSettingsView: View {
         .onDisappear { endRecording() }
     }
 
-    private func generalRow(_ id: AppShortcutID) -> some View {
-        SettingsRow(divided: id != AppShortcutID.allCases.first) {
+    private func generalRow(_ id: AppShortcutID, first: AppShortcutID?) -> some View {
+        SettingsRow(divided: id != first) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(id.title)
                     .font(SettingsLayout.bodyFont)
