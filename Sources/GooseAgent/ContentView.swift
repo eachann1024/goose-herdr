@@ -475,7 +475,6 @@ struct DetailView: View {
                     Spacer()
                 }
             }
-            .allowsHitTesting(false)
         }
         .padding(.leading, sidebarCollapsed ? 10 : 14)
         .padding(.trailing, 12)
@@ -555,7 +554,7 @@ struct DetailView: View {
             switch status {
             case .working: return String(localized: "Working")
             case .blocked: return String(localized: "Needs input")
-            case .done: return String(localized: "Done")
+            case .done: return nil
             case .idle, .unknown: return nil
             }
         }()
@@ -684,18 +683,10 @@ struct DetailView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textTertiary)
                 .multilineTextAlignment(.center)
-            Button("New Terminal") {
-                model.quickNewTerminal()
-            }
-            .controlSize(.large)
-            .focusEffectDisabled()
-            if model.hasReconnectableDevice {
-                Button("Reconnect") {
-                    model.reconnectFailedDevices()
-                }
-                .controlSize(.small)
-                .focusEffectDisabled()
-            }
+                .lineLimit(8)
+                .frame(maxWidth: 360)
+                .textSelection(.enabled)
+            placeholderAction
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.terminalBackground)
@@ -812,13 +803,36 @@ struct DetailView: View {
         .padding(.bottom, 18)
     }
 
+    @ViewBuilder
+    private var placeholderAction: some View {
+        switch model.connection {
+        case .connecting:
+            EmptyView()
+        case .failed, .idle:
+            if model.hasReconnectableDevice {
+                Button("Reconnect") {
+                    model.reconnectFailedDevices()
+                }
+                .controlSize(.large)
+                .focusEffectDisabled()
+            }
+        default:
+            Button("New Terminal") {
+                model.quickNewTerminal()
+            }
+            .controlSize(.large)
+            .focusEffectDisabled()
+        }
+    }
+
     private var placeholderText: String {
         switch model.connection {
         case .connecting: return String(localized: "Connecting…")
         case .failed(let reason): return reason
+        case .idle: return String(localized: "Not connected")
         default:
             if model.selectedSpace != nil && model.visibleSessions.isEmpty {
-                return String(localized: "This space has no terminals. Click the space name to create one.")
+                return String(localized: "This space has no terminals")
             }
             return String(localized: "Select an agent or terminal, or start a new one")
         }
@@ -882,7 +896,7 @@ struct AddDeviceSheet: View {
                         TextField("tcpGFwWCD…", text: $token)
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: 11, design: .monospaced))
-                        Text("On the remote Mac: `herdr plugin install lbr77/herdr-plugin-tailcat`, then `herdr plugin action invoke herdr.tailcat.token` and paste the token here. The WireGuard tunnel is built in — no external tool. The token is stored in the Keychain. Standalone shells and the Files workspace need SSH.")
+                        Text(String(localized: "On the remote Mac: `herdr plugin install lbr77/herdr-plugin-tailcat`, then `herdr plugin action invoke herdr.tailcat.token` and paste the token here. The WireGuard tunnel is built in — no external tool. The token is stored in the Keychain. Standalone shells and the Files workspace need SSH."))
                             .font(.system(size: 10.5))
                             .foregroundStyle(Theme.textTertiary)
                             .fixedSize(horizontal: false, vertical: true)
