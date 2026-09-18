@@ -9,9 +9,11 @@ struct RootView: View {
     @State private var sidebarCollapsed = false
     @State private var newSpaceListing: NewSpaceListing?
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
+    @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        let _ = shortcutsRevision  // the hidden ⌘B / ⌘K buttons must follow a remap
+        return ZStack(alignment: .bottomLeading) {
             HStack(spacing: 0) {
                 SidebarView(model: model, collapsed: $sidebarCollapsed)
                     .frame(width: sidebarCollapsed ? 0 : 260, alignment: .trailing)
