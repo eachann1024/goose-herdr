@@ -1399,15 +1399,15 @@ struct TerminalSettingsView: View {
                 SettingsRow {
                     Text("Font")
                     Spacer()
-                    SettingsMenu(title: "Font", value: fontName.isEmpty ? String(localized: "System Mono (SF Mono)") : fontName) {
-                        Picker("Font", selection: $fontName) {
-                            Text("System Mono (SF Mono)").tag("")
-                            Divider()
-                            ForEach(families, id: \.self) { family in
-                                Text(verbatim: family).tag(family)
-                            }
+                    Picker("Font", selection: $fontName) {
+                        Text("System Mono (SF Mono)").tag("")
+                        ForEach(families, id: \.self) { family in
+                            Text(verbatim: family).tag(family)
                         }
                     }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .fixedSize()
                 }
                 SettingsRow(divided: true) {
                     Text("Size")
