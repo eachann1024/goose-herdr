@@ -291,23 +291,13 @@ struct SidebarView: View {
         }
         .buttonStyle(SidebarRowButtonStyle(selected: selected))
         .focusEffectDisabled()
-        .help(quickActionHelp(id))
-    }
-
-
-
-    private func quickActionHelp(_ id: SidebarActionID) -> Text {
-        switch id {
-        case .newTerminal: return Text(id.title) + Text(" (\(AppShortcuts.display(for: .quickNewTerminal)))")
-        case .newSpace: return Text(id.title) + Text(" (\(AppShortcuts.display(for: .newSpace)))")
-        case .search: return Text(id.title) + Text(" (⌘K)")
-        case .files: return Text(id.title)
-        }
+        .codexTooltip(id.title, shortcut: id.shortcut)
     }
 
     private func sectionAddButton(
         systemImage: String,
-        help: String,
+        title: LocalizedStringKey,
+        shortcut: AppShortcutID?,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -317,7 +307,7 @@ struct SidebarView: View {
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
-        .help(help)
+        .codexTooltip(title, shortcut: shortcut)
     }
 
     private func sectionHeader<Trailing: View>(
@@ -709,6 +699,7 @@ struct SidebarView: View {
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()
+            .codexTooltip(verbatim: model.filteredDevice?.name ?? String(localized: "All Devices"))
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(deviceButtonHovered || model.showDevicePanel
@@ -760,14 +751,15 @@ struct OpenSettingsGearButton: View {
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
-        .help(String(localized: "Settings"))
+        .codexTooltip("Settings", shortcut: .settings)
     }
 }
 
 /// Small icon button that sits in the 28pt titlebar strip.
 struct TitlebarIconButton: View {
     let systemName: String
-    let help: LocalizedStringKey
+    let title: LocalizedStringKey
+    var shortcut: AppShortcutID?
     let action: () -> Void
     @State private var hovered = false
 
@@ -786,7 +778,7 @@ struct TitlebarIconButton: View {
         .buttonStyle(.plain)
         .focusEffectDisabled()
         .onHover { hovered = $0 }
-        .help(help)
+        .codexTooltip(title, shortcut: shortcut)
     }
 }
 
@@ -997,7 +989,7 @@ private struct EmptySpaceHelp: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if isEmpty {
-            content.help(String(localized: "No terminals — click to create one"))
+            content.codexTooltip("No terminals")
         } else {
             content
         }
