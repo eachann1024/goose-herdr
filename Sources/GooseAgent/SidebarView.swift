@@ -383,6 +383,7 @@ struct SidebarView: View {
     private struct TerminalRowView: View {
         let entry: AppModel.TerminalEntry
         @ObservedObject var model: AppModel
+        var showsSpace = false
         var showIndexHints = false
         @Binding var draggingSessionID: String?
         @Binding var sessionDrop: (id: String, after: Bool)?
@@ -396,22 +397,34 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(entry.title)
-                        .font(.system(size: 13.5))
+                        .font(showsSpace ? Theme.sidebarRowTitle : .system(size: 13.5))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     SidebarSessionIndexSlot(
                         visible: showIndexHints,
-                        number: model.sessionSwitchNumber(for: .agent(entry.ref))
+                        number: model.sessionSwitchNumber(for: .agent(entry.ref)),
+                        keepsStatus: true
                     ) {
-                        EmptyView()
+                        if model.piLaunch?.pane == entry.ref, model.showsPiLaunch {
+                            ProgressView().controlSize(.small).accessibilityLabel(Text("Loading Pi"))
+                        }
                     }
                 }
                 HStack(spacing: 5) {
                     Image(systemName: "terminal")
                         .font(.system(size: 11))
-                        .foregroundStyle(Theme.textTertiary)
-                    if let path {
+                        .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textTertiary)
+                    if showsSpace {
+                        Text("Terminal")
+                            .font(Theme.sidebarRowMeta)
+                            .foregroundStyle(Theme.textSecondary)
+                            .fixedSize()
+                        Text("·")
+                            .font(Theme.sidebarRowMeta)
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    if let path, !showsSpace {
                         Text(path)
                             .font(.system(size: 11.5, design: .monospaced))
                             .foregroundStyle(Theme.textTertiary)
@@ -422,21 +435,23 @@ struct SidebarView: View {
                             size: 11,
                             slot: 11
                         )
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textTertiary)
                         Text(model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID))
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textTertiary)
+                            .font(showsSpace ? Theme.sidebarRowMeta : .system(size: 11.5))
+                            .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textTertiary)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                     }
                     Spacer(minLength: 0)
                     if model.showsRowDeviceBadges {
-                        DeviceChip(device: entry.device)
+                        DeviceChip(device: entry.device, showsHelp: false)
+                            .layoutPriority(showsSpace ? 1 : 0)
                     }
                 }
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .frame(height: 51)
+            .padding(.vertical, showsSpace ? 8 : 7)
+            .frame(minHeight: showsSpace ? 54 : 51, maxHeight: showsSpace ? nil : 51)
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 7)
@@ -496,16 +511,17 @@ struct SidebarView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
                 Text(session.title)
-                    .font(.system(size: 13.5))
+                    .font(showsPrioritySessions ? Theme.sidebarRowTitle : .system(size: 13.5))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 Text(session.device.name)
                     .font(.system(size: 11))
-                    .foregroundStyle(Theme.textGhost)
+                    .foregroundStyle(showsPrioritySessions ? Theme.textSecondary : Theme.textGhost)
                 SidebarSessionIndexSlot(
                     visible: sessionIndexHints.isShowing,
-                    number: model.sessionSwitchNumber(for: .shell(session.id))
+                    number: model.sessionSwitchNumber(for: .shell(session.id)),
+                    keepsStatus: true
                 ) {
                     EmptyView()
                 }
