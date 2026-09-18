@@ -1800,6 +1800,7 @@ final class AppModel: ObservableObject {
                 uniqueKeysWithValues: snapshot.agents.map { ($0.paneID, $0.status) }
             )
             let previousPaneOrder = visibleSessions.map(\.ref)
+            let previousSpaceOrder = visibleSpaces.map(\.ref)
             let previousWorkspaces = sessions[deviceID]?.workspaces ?? []
             let liveIDs = Set(snapshot.workspaces.map(\.workspaceID))
             retainDisappearedSpaces(
@@ -1853,14 +1854,15 @@ final class AppModel: ObservableObject {
             }
             if let space = selectedSpace, space.deviceID == deviceID,
                !mergedWorkspaces.contains(where: { $0.workspaceID == space.workspaceID }) {
-                selectedSpace = nil
+                selectSpaceAfterClosing(space, previousOrder: previousSpaceOrder)
             }
-            if selectedPane == nil, selectedSpace.map(isRetainedSpace) != true {
+            if selectedPane == nil, !showsPiLaunch, selectedSpace.map(isRetainedSpace) != true {
                 if let focusedPaneID = snapshot.focusedPaneID,
                    paneIDs.contains(focusedPaneID),
                    deviceFilter == nil || deviceFilter == deviceID {
                     let focused = PaneRef(deviceID: deviceID, paneID: focusedPaneID)
-                    if selectedSpace == nil
+                    if !startingPanes.contains(focused),
+                       selectedSpace == nil
                         || selectedAttachedEntry.map({
                             $0.ref == focused && $0.workspaceID == selectedSpace?.workspaceID
                         }) == true {
@@ -2630,12 +2632,25 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private func selectSpaceAfterClosing(_ ref: SpaceRef, previousOrder: [SpaceRef]) {
+        guard selectedSpace == ref else { return }
+        let remaining = Set(visibleSpaces.map(\.ref))
+        guard let index = previousOrder.firstIndex(of: ref) else {
+            selectSpace(nil)
+            return
+        }
+        let neighbors = Array(previousOrder.dropFirst(index + 1))
+            + previousOrder.prefix(index).reversed()
+        selectSpace(neighbors.first { remaining.contains($0) })
+    }
+
     func dismissRetainedSpace(_ ref: SpaceRef) {
+        let previousOrder = visibleSpaces.map(\.ref)
         markSpaceDismissed(ref)
         retainedSpaces.removeAll { $0.deviceID == ref.deviceID && $0.workspaceID == ref.workspaceID }
         RetainedSpaceStore.save(retainedSpaces)
         sessions[ref.deviceID]?.workspaces.removeAll { $0.workspaceID == ref.workspaceID }
-        if selectedSpace == ref { selectedSpace = nil }
+        selectSpaceAfterClosing(ref, previousOrder: previousOrder)
     }
 
     func markSpaceDismissed(_ ref: SpaceRef) {
