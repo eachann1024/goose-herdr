@@ -9,6 +9,23 @@ enum ConnectionState: Equatable {
     case failed(String)
 }
 
+enum ConnectionFailureFormatting {
+    static func tailscaleAuthenticationURL(in reason: String) -> String? {
+        guard let match = reason.range(
+            of: #"https://login\.tailscale\.com/a/[A-Za-z0-9]+"#,
+            options: .regularExpression
+        ) else { return nil }
+        return String(reason[match])
+    }
+
+    static func isTailscaleCheckoff(_ reason: String) -> Bool {
+        reason.localizedCaseInsensitiveContains("tailscale")
+            && (reason.localizedCaseInsensitiveContains("checkoff")
+                || reason.localizedCaseInsensitiveContains("to authenticate")
+                || tailscaleAuthenticationURL(in: reason) != nil)
+    }
+}
+
 /// Agent kinds offered by the picker. Local manifests are filtered through the
 /// login-shell search PATH; remote manifests stay server-owned.
 enum AgentCatalogState: Equatable {
@@ -531,10 +548,10 @@ final class AppModel: ObservableObject {
             return failed
         }
         if states.contains(.connecting) { return .connecting }
-        if !states.isEmpty, states.allSatisfy({ if case .connected = $0 { return true }; return false }) {
+        if states.contains(where: { if case .connected = $0 { return true }; return false }) {
             return .connected(version: "")
         }
-        return states.isEmpty ? .idle : .connecting
+        return .idle
     }
 
     struct AgentEntry: Identifiable {
@@ -1140,8 +1157,8 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Runs one device's session: connect, snapshot, event stream, and reconnect
-    /// with exponential backoff (1s → 30s) whenever the connection drops.
+    /// Runs one device's session: connect, snapshot, and the event stream.
+    /// A failed connect or a dropped stream stays failed until the user taps Reconnect.
     private func startSession(_ device: Device) {
         sessionTasks[device.id]?.cancel()
         if sessions[device.id] == nil {
@@ -1154,83 +1171,75 @@ final class AppModel: ObservableObject {
         }
         let service = service(for: device)
         sessionTasks[device.id] = Task { [weak self] in
-            var backoff: Double = 1
-            while !Task.isCancelled {
-                guard let self else { return }
-                self.sessions[device.id]?.connection = .connecting
-                do {
-                    let pong = try await service.connect()
-                    self.sessions[device.id]?.connection = .connected(version: pong.version)
-                    backoff = 1
-                    // retried on every successful connect until it sticks (a fresh
-                    // device's first probes can fail before its host key is known)
-                    if let current = self.device(device.id) {
-                        self.probeOSIfNeeded(current)
-                    }
-                    await self.refresh(device.id)
-                    await self.loadAgentCatalog(deviceID: device.id, using: service)
-                    eventSubscriptions: while !Task.isCancelled {
-                        let subscribedPaneIDs = self.statusSubscriptionPaneIDs(device.id)
-                        let stream = try await service.events(statusPaneIDs: subscribedPaneIDs)
-                        var needsResubscribe = false
-                        var resubscribeDelay: UInt64 = 100_000_000
-                        for try await event in stream {
-                            guard !Task.isCancelled else { return }
-                            if event.kind == HerdrEvent.agentStatusChangedKind {
-                                if self.applyAgentStatusEvent(event, deviceID: device.id) {
-                                    self.scheduleRefresh(device.id)
-                                } else {
-                                    _ = await self.refreshImmediately(device.id)
-                                }
-                            } else if event.kind == HerdrEvent.subscriptionStartedKind
-                                || Self.paneTopologyEventKinds.contains(event.kind) {
-                                if !(await self.refreshImmediately(device.id)) {
-                                    needsResubscribe = true
-                                    resubscribeDelay = 500_000_000
-                                    break
-                                }
-                            } else {
-                                self.scheduleRefresh(device.id)
-                            }
-
-                            if event.kind == HerdrEvent.subscriptionStartedKind
-                                || Self.paneTopologyEventKinds.contains(event.kind) {
-                                let currentPaneIDs = self.statusSubscriptionPaneIDs(device.id)
-                                if currentPaneIDs != subscribedPaneIDs {
-                                    needsResubscribe = true
-                                    break
-                                }
-                            }
-                        }
-                        if needsResubscribe {
-                            try? await Task.sleep(nanoseconds: resubscribeDelay)
-                            continue eventSubscriptions
-                        }
-                        guard !Task.isCancelled else { return }
-                        throw HerdrError.connectionFailed("event stream ended")
-                    }
-                } catch {
-                    self.sessions[device.id]?.connection = .failed(error.localizedDescription)
-                    // The catalog's initial state is .loading; when connect()
-                    // itself fails the load never runs, and without this the
-                    // New Agent panel spins on "Checking agents…" forever
-                    // while the only hint is the footer indicator (#69).
-                    if case .loading = self.sessions[device.id]?.agentCatalog ?? .loading {
-                        self.sessions[device.id]?.agentCatalog = .failed(
-                            self.actionErrorMessage(error, device: device)
-                        )
-                    }
-                    if let target = device.sshTarget, Self.isSSHAuthenticationFailure(error) {
-                        self.sshAuthenticationRequest = SSHAuthenticationRequest(
-                            deviceID: device.id,
-                            target: target
-                        )
-                        return
-                    }
+            guard let self else { return }
+            self.sessions[device.id]?.connection = .connecting
+            do {
+                let pong = try await service.connect()
+                self.sessions[device.id]?.connection = .connected(version: pong.version)
+                if let current = self.device(device.id) {
+                    self.probeOSIfNeeded(current)
                 }
-                guard !Task.isCancelled else { return }
-                try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
-                backoff = min(backoff * 2, 30)
+                await self.refresh(device.id)
+                await self.loadAgentCatalog(deviceID: device.id, using: service)
+                eventSubscriptions: while !Task.isCancelled {
+                    let subscribedPaneIDs = self.statusSubscriptionPaneIDs(device.id)
+                    let stream = try await service.events(statusPaneIDs: subscribedPaneIDs)
+                    var needsResubscribe = false
+                    var resubscribeDelay: UInt64 = 100_000_000
+                    for try await event in stream {
+                        guard !Task.isCancelled else { return }
+                        if event.kind == HerdrEvent.agentStatusChangedKind {
+                            if self.applyAgentStatusEvent(event, deviceID: device.id) {
+                                self.scheduleRefresh(device.id)
+                            } else {
+                                _ = await self.refreshImmediately(device.id)
+                            }
+                        } else if event.kind == HerdrEvent.subscriptionStartedKind
+                            || Self.paneTopologyEventKinds.contains(event.kind) {
+                            if !(await self.refreshImmediately(device.id)) {
+                                needsResubscribe = true
+                                resubscribeDelay = 500_000_000
+                                break
+                            }
+                        } else {
+                            self.scheduleRefresh(device.id)
+                        }
+
+                        if event.kind == HerdrEvent.subscriptionStartedKind
+                            || Self.paneTopologyEventKinds.contains(event.kind) {
+                            let currentPaneIDs = self.statusSubscriptionPaneIDs(device.id)
+                            if currentPaneIDs != subscribedPaneIDs {
+                                needsResubscribe = true
+                                break
+                            }
+                        }
+                    }
+                    if needsResubscribe {
+                        try? await Task.sleep(nanoseconds: resubscribeDelay)
+                        continue eventSubscriptions
+                    }
+                    guard !Task.isCancelled else { return }
+                    throw HerdrError.connectionFailed("event stream ended")
+                }
+            } catch {
+                self.sessions[device.id]?.connection = .failed(
+                    self.connectionFailureMessage(error, device: device)
+                )
+                // The catalog's initial state is .loading; when connect()
+                // itself fails the load never runs, and without this the
+                // New Agent panel spins on "Checking agents…" forever
+                // while the only hint is the footer indicator (#69).
+                if case .loading = self.sessions[device.id]?.agentCatalog ?? .loading {
+                    self.sessions[device.id]?.agentCatalog = .failed(
+                        self.actionErrorMessage(error, device: device)
+                    )
+                }
+                if let target = device.sshTarget, Self.isSSHAuthenticationFailure(error) {
+                    self.sshAuthenticationRequest = SSHAuthenticationRequest(
+                        deviceID: device.id,
+                        target: target
+                    )
+                }
             }
         }
     }
@@ -1350,19 +1359,40 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Leaves the device disconnected but recoverable; the reconnect loop stopped at the prompt.
+    /// Leaves the device disconnected but recoverable; no automatic retry after cancel.
     func cancelSSHAuthentication(for request: SSHAuthenticationRequest) {
         sshAuthenticationRequest = nil
         sessions[request.deviceID]?.connection =
             .failed(String(localized: "Authentication cancelled — choose Reconnect to try again"))
     }
 
+    /// Stops the live tunnel but keeps the device so the user can reconnect later.
+    func disconnectDevice(_ device: Device) {
+        guard !device.isLocal else { return }
+        if sshAuthenticationRequest?.deviceID == device.id {
+            sshAuthenticationRequest = nil
+        }
+        attachSessions.removeAll { $0.device.id == device.id }
+        stopSession(device.id)
+        if selectedSpace?.deviceID == device.id { selectedSpace = nil }
+        if selectedPane?.deviceID == device.id {
+            selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
+        }
+    }
+
     var hasReconnectableDevice: Bool {
-        devicesInScope.contains { isFailed($0.id) }
+        devicesInScope.contains { isFailed($0.id) || isIdle($0.id) }
+    }
+
+    func reconnectDevice(_ device: Device) {
+        stopSession(device.id)
+        startSession(device)
+        probeOSIfNeeded(device)
+        refreshNamedSessions()
     }
 
     func reconnectFailedDevices() {
-        for device in devicesInScope where isFailed(device.id) {
+        for device in devicesInScope where isFailed(device.id) || isIdle(device.id) {
             stopSession(device.id)
             startSession(device)
             probeOSIfNeeded(device)
@@ -1375,6 +1405,10 @@ final class AppModel: ObservableObject {
     private func isFailed(_ deviceID: UUID) -> Bool {
         if case .failed = session(deviceID).connection { return true }
         return false
+    }
+
+    private func isIdle(_ deviceID: UUID) -> Bool {
+        session(deviceID).connection == .idle
     }
 
     /// Renames a device and/or updates its SSH target (e.g. after an IP change).
@@ -1701,8 +1735,7 @@ final class AppModel: ObservableObject {
 
     /// An action fired while the device session is down surfaces the bare
     /// "connection failed: not connected", which points at nothing. The
-    /// reconnect loop already knows why the device is unreachable — say that
-    /// instead. (#21)
+    /// session already knows why the device is unreachable — say that instead. (#21)
     func actionErrorMessage(_ error: Error, device: Device) -> String {
         guard let herdrError = error as? HerdrError,
               case .connectionFailed(let reason) = herdrError,
@@ -1717,6 +1750,42 @@ final class AppModel: ObservableObject {
             return String(localized: "\(device.name) isn't connected.")
         case .connected:
             return String(localized: "\(device.name) just reconnected — try again.")
+        }
+    }
+
+    /// User-facing copy for a failed device session. Raw SSH/Tailscale blobs stay out of the empty state.
+    func connectionFailureMessage(_ error: Error, device: Device) -> String {
+        Self.connectionFailureMessage(error, deviceName: device.name)
+    }
+
+    static func connectionFailureMessage(_ error: Error, deviceName: String) -> String {
+        guard let herdrError = error as? HerdrError else {
+            return String(localized: "Couldn't connect to \(deviceName)")
+        }
+        switch herdrError {
+        case .tunnelFailed(let reason):
+            if ConnectionFailureFormatting.isTailscaleCheckoff(reason) {
+                if let url = ConnectionFailureFormatting.tailscaleAuthenticationURL(in: reason) {
+                    return String(localized: "Tailscale SSH needs another check. Authenticate at the link below, then tap Reconnect.\n\(url)")
+                }
+                return String(localized: "Tailscale SSH needs another check. Authenticate in Tailscale, then tap Reconnect.")
+            }
+            if isSSHAuthenticationFailure(error) {
+                return String(localized: "SSH authentication failed for \(deviceName).")
+            }
+            return String(localized: "Couldn't connect to \(deviceName) over SSH.")
+        case .connectionFailed:
+            return String(localized: "Couldn't connect to \(deviceName)")
+        case .remoteHerdrDown(let target, _):
+            return String(localized: "herdr isn't running on \(target).")
+        case .tailcatBridgeFailed:
+            return String(localized: "Couldn't open the tailcat tunnel to \(deviceName).")
+        case .tailcatTokenMissing:
+            return String(localized: "This device has no tailcat token.")
+        case .socketUnavailable, .herdrNotInstalled:
+            return String(localized: "Couldn't find herdr on this Mac.")
+        default:
+            return String(localized: "Couldn't connect to \(deviceName)")
         }
     }
 
