@@ -1605,10 +1605,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func reloadAgentCatalog(deviceID: UUID) {
-        guard let device = device(deviceID) else { return }
+    @discardableResult
+    func reloadAgentCatalog(deviceID: UUID) -> Task<Void, Never>? {
+        guard let device = device(deviceID) else { return nil }
         let service = service(for: device)
-        Task { await loadAgentCatalog(deviceID: deviceID, using: service) }
+        return Task { await loadAgentCatalog(deviceID: deviceID, using: service) }
     }
 
     /// Tears down every live tunnel. Awaited from the app's terminate hook — `stopSession`
