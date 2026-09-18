@@ -806,6 +806,166 @@ final class AppModel: ObservableObject {
         }
     }
 
+    static let prioritySessionsKey = "sidebar.prioritySessions"
+
+    var prioritySessionsEnabled: Bool {
+        UserDefaults.standard.bool(forKey: Self.prioritySessionsKey)
+            && !UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey)
+    }
+
+    func sessionAttention(_ entry: AttachedEntry) -> SpaceAttention {
+        guard case .agent(let agent) = entry else { return .none }
+        return SpaceAttention.rollup([(status: agent.agent.status, unreadDone: isUnread(agent))])
+    }
+
+    /// Display retention is separate from unread acknowledgement; preserve the original category.
+    @Published private var priorityHold: (ref: PaneRef, attention: SpaceAttention)?
+    @Published private var handledPriority: [PaneRef] = []
+    @Published private var loadingOrder: [PaneRef: UInt64] = [:]
+    private var nextLoadingOrder: UInt64 = 0
+    private var loadingBaseline: [UUID: [String: (status: AgentStatus, seq: UInt64?)]] = [:]
+
+    private func notePrioritySelection(from previous: PaneRef?) {
+        if let hold = priorityHold, hold.ref == selectedPane { return }
+        if previous != selectedPane { leavePrioritySelection(previous) }
+        guard prioritySessionsEnabled, let selectedPane,
+              let entry = sessions(in: nil).first(where: { $0.ref == selectedPane }),
+              isPrioritySession(entry), !isLoadingSession(entry) else { return }
+        priorityHold = (selectedPane, sessionAttention(entry))
+    }
+
+    private func leavePrioritySelection(_ previous: PaneRef?) {
+        let ref = priorityHold?.ref ?? previous
+        let wasHeld = priorityHold != nil
+        priorityHold = nil
+        guard let ref, let entry = sessions(in: nil).first(where: { $0.ref == ref }),
+              wasHeld || (prioritySessionsEnabled && isPrioritySession(entry)),
+              sessionAttention(entry) != .blocked, !isLoadingSession(entry) else { return }
+        handledPriority.removeAll { $0 == ref }
+        handledPriority.insert(ref, at: 0)
+    }
+
+    private func noteLoading(_ ref: PaneRef) {
+        nextLoadingOrder += 1
+        loadingOrder[ref] = nextLoadingOrder
+        handledPriority.removeAll { $0 == ref }
+        if priorityHold?.ref == ref { priorityHold = nil }
+    }
+
+    /// Only this run's observed activity is ordered globally. Server seq orders one device's
+    /// snapshot batch, not devices or wall-clock sends. Unchanged working cannot reveal a resend.
+    private func noteLoadingSnapshot(_ agents: [AgentInfo], deviceID: UUID) {
+        let baseline = loadingBaseline[deviceID]
+        let reset = agents.contains { agent in
+            guard let old = baseline?[agent.paneID]?.seq, let seq = agent.stateChangeSeq else { return false }
+            return seq < old
+        }
+        if reset { loadingOrder = loadingOrder.filter { $0.key.deviceID != deviceID } }
+        if let baseline, !reset {
+            let changes = agents.filter { agent in
+                let ref = PaneRef(deviceID: deviceID, paneID: agent.paneID)
+                if startingPanes.contains(ref), agent.status == .working { return false }
+                guard let old = baseline[agent.paneID] else {
+                    // A reconnect or topology refresh has no history; preserve
+                    // the original tab order until a real event is observed.
+                    return false
+                }
+                return old.status != agent.status
+                    || old.seq.map { (agent.stateChangeSeq ?? 0) > $0 } == true
+            }
+            // Equal/missing seq share a rank: snapshot traversal is not event history.
+            let sequences = Set(changes.map { $0.stateChangeSeq ?? 0 }).sorted()
+            for seq in sequences {
+                nextLoadingOrder += 1
+                for agent in changes where (agent.stateChangeSeq ?? 0) == seq {
+                    let ref = PaneRef(deviceID: deviceID, paneID: agent.paneID)
+                    loadingOrder[ref] = nextLoadingOrder
+                    handledPriority.removeAll { $0 == ref }
+                }
+            }
+        }
+        loadingBaseline[deviceID] = Dictionary(uniqueKeysWithValues: agents.map {
+            ($0.paneID, (status: $0.status, seq: $0.stateChangeSeq))
+        })
+        for agent in agents where agent.status == .working {
+            let ref = PaneRef(deviceID: deviceID, paneID: agent.paneID)
+            if priorityHold?.ref == ref { priorityHold = nil }
+        }
+    }
+
+    private func noteLoadingEvent(_ status: AgentStatus, paneID: String, deviceID: UUID) {
+        guard let old = loadingBaseline[deviceID]?[paneID] else { return }
+        let ref = PaneRef(deviceID: deviceID, paneID: paneID)
+        if old.status != status,
+           !(startingPanes.contains(ref) && status == .working) { noteLoading(ref) }
+        // The event has no seq. Next snapshot establishes it without counting the event twice.
+        loadingBaseline[deviceID]?[paneID] = (status, nil)
+    }
+
+    private func prunePriorityState(deviceID: UUID, paneIDs: Set<String>) {
+        handledPriority.removeAll { $0.deviceID == deviceID && !paneIDs.contains($0.paneID) }
+        loadingOrder = loadingOrder.filter { $0.key.deviceID != deviceID || paneIDs.contains($0.key.paneID) }
+        loadingBaseline[deviceID] = loadingBaseline[deviceID]?.filter { paneIDs.contains($0.key) }
+        if let hold = priorityHold, hold.ref.deviceID == deviceID, !paneIDs.contains(hold.ref.paneID) {
+            priorityHold = nil
+        }
+    }
+
+    private func isLoadingSession(_ entry: AttachedEntry) -> Bool {
+        if startingPanes.contains(entry.ref) { return true }
+        guard case .agent(let agent) = entry else { return false }
+        return agent.agent.status == .working || agent.agent.launchPending == true
+    }
+
+    private func priorityGroupAttention(_ entry: AttachedEntry) -> SpaceAttention {
+        let attention = sessionAttention(entry)
+        // Real blocked always wins, even during startup; working releases display retention.
+        if attention == .blocked { return attention }
+        if isLoadingSession(entry) { return .none }
+        if let hold = priorityHold, hold.ref == entry.ref { return hold.attention }
+        return attention
+    }
+
+    func isPriorityGroup(_ entry: AttachedEntry) -> Bool {
+        let attention = priorityGroupAttention(entry)
+        return attention == .blocked || attention == .unreadDone
+    }
+
+    /// Priority first; Other contains loading, recently handled, then original tab history.
+    var sidebarSessions: [AttachedEntry] {
+        let entries = prioritySessionsEnabled ? sessions(in: nil) : visibleSessions
+        guard prioritySessionsEnabled else { return recentSessions(entries) }
+        let priority = entries.filter { priorityGroupAttention($0) == .blocked }
+            + entries.filter { priorityGroupAttention($0) == .unreadDone }
+        let other = entries.filter { !isPriorityGroup($0) }
+        let loading = other.enumerated()
+            .filter { isLoadingSession($0.element) }
+            .sorted {
+                let left = loadingOrder[$0.element.ref] ?? 0
+                let right = loadingOrder[$1.element.ref] ?? 0
+                return left != right ? left > right : $0.offset < $1.offset
+            }
+            .map(\.element)
+        let remaining = other.filter { !isLoadingSession($0) }
+        let handled = handledPriority.compactMap { ref in remaining.first { $0.ref == ref } }
+        return priority + loading + handled + remaining.filter { !handledPriority.contains($0.ref) }
+    }
+
+    /// ponytail: ranks live only in memory; persist activity timestamps if restart history is needed.
+    /// Sessions without a rank retain their filtered tab order until a real change.
+    private func recentSessions(_ entries: [AttachedEntry]) -> [AttachedEntry] {
+        entries.enumerated().sorted { lhs, rhs in
+            let left = loadingOrder[lhs.element.ref] ?? 0
+            let right = loadingOrder[rhs.element.ref] ?? 0
+            return left != right ? left > right : lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    func isPrioritySession(_ entry: AttachedEntry) -> Bool {
+        let attention = sessionAttention(entry)
+        return attention == .blocked || attention == .unreadDone
+    }
+
     func isUnread(_ entry: AgentEntry) -> Bool {
         unreadAgents.contains(AgentUnreadKey(deviceID: entry.device.id, paneID: entry.agent.paneID))
     }
@@ -877,13 +1037,10 @@ final class AppModel: ObservableObject {
         isRetainedSpace(entry.ref)
     }
 
-    /// Click a live space to filter it; click a gray empty space to recreate its terminal.
+    /// Click a space to filter it. Empty spaces stay on the placeholder;
+    /// New Terminal is what recreates a session.
     func activateSpace(_ ref: SpaceRef) {
-        if isRetainedSpace(ref) {
-            reviveRetainedSpace(ref)
-        } else {
-            selectSpace(ref)
-        }
+        selectSpace(ref)
     }
 
     /// Best-effort root path for a space: workspace.cwd, else any pane/agent cwd in it.
@@ -1150,7 +1307,7 @@ final class AppModel: ObservableObject {
     }
 
     var switchableSessions: [SwitchableSession] {
-        var items: [SwitchableSession] = visibleSessions.map { .agent($0.ref) }
+        var items: [SwitchableSession] = sidebarSessions.map { .agent($0.ref) }
         items += shellSessions.map { .shell($0.id) }
         return items
     }
@@ -1405,6 +1562,8 @@ final class AppModel: ObservableObject {
         refreshRequested.remove(id)
         statusGenerations[id] = nil
         previousStatuses[id] = nil
+        prunePriorityState(deviceID: id, paneIDs: [])
+        loadingBaseline[id] = nil
         let service = services[id]
         services[id] = nil
         sessions[id] = nil
@@ -1581,6 +1740,7 @@ final class AppModel: ObservableObject {
                 refreshRequested.insert(deviceID)
                 return true
             }
+            noteLoadingSnapshot(snapshot.agents, deviceID: deviceID)
             unreadAgents = AgentUnread.applying(
                 previous: previousStatuses[deviceID] ?? [:],
                 agents: snapshot.agents,
@@ -1624,6 +1784,7 @@ final class AppModel: ObservableObject {
             sessions[deviceID]?.panes = snapshot.ordinaryTerminalPanes
             let paneIDs = Set((snapshot.panes ?? []).map(\.paneID))
                 .union(snapshot.agents.map(\.paneID))
+            prunePriorityState(deviceID: deviceID, paneIDs: paneIDs)
             // Drop kept-alive attaches whose pane is gone (closed). A pane only taken
             // over by another client still exists, so it stays — its Reconnect overlay
             // needs the kept-alive child to rebuild the attach.
@@ -1727,6 +1888,7 @@ final class AppModel: ObservableObject {
         let status = AgentStatus(wire: statusRaw)
         guard state.agents[index].status != status else { return true }
         let previous = previousStatuses[deviceID] ?? [:]
+        noteLoadingEvent(status, paneID: paneID, deviceID: deviceID)
         state.agents[index] = state.agents[index].updatingStatus(status)
         unreadAgents = AgentUnread.applying(
             previous: previous,
