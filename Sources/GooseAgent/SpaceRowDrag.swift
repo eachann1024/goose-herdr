@@ -91,6 +91,7 @@ struct SpaceRowDragHost: View {
 }
 
 struct AgentRowDragHost: View {
+    var allowsDrag = true
     let entryID: String
     let onClick: () -> Void
     let onRename: () -> Void
@@ -112,6 +113,7 @@ struct AgentRowDragHost: View {
             ],
             onClick: onClick,
             onDoubleClick: onRename,
+            allowsDrag: allowsDrag,
             onDragStart: onDragStart,
             onDragEnd: onDragEnd,
             onDropHover: onDropHover,
@@ -122,6 +124,7 @@ struct AgentRowDragHost: View {
 }
 
 struct TerminalRowDragHost: View {
+    var allowsDrag = true
     let entryID: String
     let onClick: () -> Void
     let onRename: () -> Void
@@ -143,6 +146,7 @@ struct TerminalRowDragHost: View {
             ],
             onClick: onClick,
             onDoubleClick: onRename,
+            allowsDrag: allowsDrag,
             onDragStart: onDragStart,
             onDragEnd: onDragEnd,
             onDropHover: onDropHover,
@@ -307,7 +311,8 @@ final class SidebarRowDragNSView: NSView, NSDraggingSource {
     }
 
     private func draggedID(from sender: NSDraggingInfo) -> String? {
-        sender.draggingPasteboard.string(forType: pasteboardType)
+        guard allowsDrag else { return nil }
+        return sender.draggingPasteboard.string(forType: pasteboardType)
     }
 }
 
