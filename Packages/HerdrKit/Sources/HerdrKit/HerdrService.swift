@@ -238,6 +238,29 @@ public actor HerdrService {
         )
     }
 
+    /// Git metadata for the exact pane directory. A missing result means the path is
+    /// not a Git work tree or the metadata probe failed; callers must not infer a branch.
+    public func gitRepositoryInfo(at cwd: String) async -> GitRepositoryInfo? {
+        let trimmed = cwd.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        switch device.kind {
+        case .local:
+            return await GitRepositoryInfo.local(at: trimmed)
+        case .ssh(let target):
+            let path = Self.shellQuoted(trimmed)
+            let output = try? await SSHTunnel.runSSH(
+                target: target,
+                command: "git -C \(path) rev-parse --path-format=absolute --show-toplevel --git-dir --git-common-dir --abbrev-ref HEAD",
+                timeout: 5,
+                credentialID: device.id
+            )
+            return output.flatMap { GitRepositoryInfo.parse($0) }
+        case .tailcat:
+            // tailcat carries the herdr socket only; it has no remote shell channel.
+            return nil
+        }
+    }
+
     /// The home directory on this device (local $HOME, or the probed remote one).
     public func homeDirectory() async throws -> String {
         switch device.kind {
@@ -298,6 +321,69 @@ public actor HerdrService {
     /// Wraps a path for the remote shell — see `ShellQuoting.quoted`.
     static func shellQuoted(_ path: String) -> String {
         ShellQuoting.quoted(path)
+    }
+
+    /// Git metadata for a local path is queried off the actor/UI thread.
+    public struct GitRepositoryInfo: Sendable, Equatable {
+        public let repositoryName: String
+        public let branch: String?
+        public let isWorktree: Bool
+
+        public init(repositoryName: String, branch: String?, isWorktree: Bool) {
+            self.repositoryName = repositoryName
+            self.branch = branch
+            self.isWorktree = isWorktree
+        }
+
+        public static func parse(_ output: String) -> GitRepositoryInfo? {
+            let lines = output.split(whereSeparator: \.isNewline).map(String.init)
+            guard lines.count >= 4 else { return nil }
+            let root = URL(fileURLWithPath: lines[0]).standardizedFileURL
+            guard !root.path.isEmpty else { return nil }
+            let gitDirectory = resolve(lines[1], relativeTo: root)
+            let commonDirectory = resolve(lines[2], relativeTo: root)
+            let branch = lines[3].trimmingCharacters(in: .whitespacesAndNewlines)
+            let repositoryRoot = commonDirectory.lastPathComponent == ".git"
+                ? commonDirectory.deletingLastPathComponent()
+                : root
+            return GitRepositoryInfo(
+                repositoryName: repositoryRoot.lastPathComponent,
+                branch: branch.isEmpty || branch == "HEAD" ? nil : branch,
+                isWorktree: gitDirectory != commonDirectory
+            )
+        }
+
+        fileprivate static func resolve(_ path: String, relativeTo root: URL) -> URL {
+            let url = URL(fileURLWithPath: path)
+            return (path.hasPrefix("/") ? url : root.appendingPathComponent(path)).standardizedFileURL
+        }
+
+        fileprivate static func local(at cwd: String) async -> GitRepositoryInfo? {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async {
+                    let process = Process()
+                    process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+                    process.arguments = ["-C", cwd, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-dir", "--git-common-dir", "--abbrev-ref", "HEAD"]
+                    let output = Pipe()
+                    process.standardOutput = output
+                    process.standardError = FileHandle.nullDevice
+                    do {
+                        try process.run()
+                        process.waitUntilExit()
+                        guard process.terminationStatus == 0 else {
+                            continuation.resume(returning: nil)
+                            return
+                        }
+                        let data = output.fileHandleForReading.readDataToEndOfFile()
+                        continuation.resume(returning: GitRepositoryInfo.parse(
+                            String(data: data, encoding: .utf8) ?? ""
+                        ))
+                    } catch {
+                        continuation.resume(returning: nil)
+                    }
+                }
+            }
+        }
     }
 
     /// Creates a workspace (herdr "space") rooted at a directory.
