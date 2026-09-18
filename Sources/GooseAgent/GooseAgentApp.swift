@@ -3,6 +3,7 @@ import Darwin
 import HerdrKit
 import SwiftUI
 import UserNotifications
+import UniformTypeIdentifiers
 
 /// Holds app termination open long enough to tear the SSH tunnels down: without
 /// `.terminateLater` the process dies before the teardown task gets to run, and the
@@ -256,6 +257,59 @@ struct GooseAgentApp: App {
                     focusedModel?.selectSwitchableSession(number: 9)
                 }
                 .keyboardShortcut("9", modifiers: .command)
+                .disabled(focusedModel == nil)
+                Divider()
+                // ⌃1 is All Spaces; ⌃2…9,0 follow sidebar space order.
+                // 0 is the 10th item (keyboard row), not last.
+                Button("Go to Space 1") {
+                    focusedModel?.selectSwitchableSpace(number: 1)
+                }
+                .keyboardShortcut("1", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 2") {
+                    focusedModel?.selectSwitchableSpace(number: 2)
+                }
+                .keyboardShortcut("2", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 3") {
+                    focusedModel?.selectSwitchableSpace(number: 3)
+                }
+                .keyboardShortcut("3", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 4") {
+                    focusedModel?.selectSwitchableSpace(number: 4)
+                }
+                .keyboardShortcut("4", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 5") {
+                    focusedModel?.selectSwitchableSpace(number: 5)
+                }
+                .keyboardShortcut("5", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 6") {
+                    focusedModel?.selectSwitchableSpace(number: 6)
+                }
+                .keyboardShortcut("6", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 7") {
+                    focusedModel?.selectSwitchableSpace(number: 7)
+                }
+                .keyboardShortcut("7", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 8") {
+                    focusedModel?.selectSwitchableSpace(number: 8)
+                }
+                .keyboardShortcut("8", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 9") {
+                    focusedModel?.selectSwitchableSpace(number: 9)
+                }
+                .keyboardShortcut("9", modifiers: .control)
+                .disabled(focusedModel == nil)
+                Button("Go to Space 0") {
+                    focusedModel?.selectSwitchableSpace(number: 0)
+                }
+                .keyboardShortcut("0", modifiers: .control)
                 .disabled(focusedModel == nil)
             }
         }
