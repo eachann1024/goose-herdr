@@ -136,14 +136,23 @@ struct AgentKindBadge: View {
 /// stable distinct color, so identical OS icons (two Macs) stay tellable apart.
 struct DeviceChip: View {
     let device: Device
+    var showsHelp = true
 
     private var shortName: String {
         device.name.count > 12 ? String(device.name.prefix(11)) + "…" : device.name
     }
 
     var body: some View {
+        if showsHelp {
+            chip.help(device.name)
+        } else {
+            chip
+        }
+    }
+
+    private var chip: some View {
         let tint = Theme.deviceTint(device)
-        HStack(spacing: 3) {
+        return HStack(spacing: 3) {
             DeviceIcon(osID: device.osID, isLocal: device.isLocal, size: 8)
             Text(shortName)
                 .font(.system(size: 9, weight: .medium))
@@ -153,7 +162,7 @@ struct DeviceChip: View {
         .frame(height: 15)
         .background(tint.opacity(0.13), in: RoundedRectangle(cornerRadius: 4))
         .fixedSize()
-        .help(device.name)
+        .accessibilityLabel(Text(verbatim: device.name))
     }
 }
 
