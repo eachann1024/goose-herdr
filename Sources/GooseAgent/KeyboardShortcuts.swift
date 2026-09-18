@@ -127,8 +127,8 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var defaultChord: KeyChord {
         switch self {
-        case .newItem: return KeyChord(key: "n", modifiers: [.command, .shift])
-        case .quickNewTerminal: return KeyChord(key: "t", modifiers: .command)
+        case .newItem: return KeyChord(key: "t", modifiers: .command)
+        case .quickNewTerminal: return KeyChord(key: "t", modifiers: [.command, .shift])
         case .newSpace: return KeyChord(key: "n", modifiers: .command)
         case .search: return KeyChord(key: "k", modifiers: .command)
         case .settings: return KeyChord(key: ",", modifiers: .command)
