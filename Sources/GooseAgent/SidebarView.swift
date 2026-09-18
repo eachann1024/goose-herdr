@@ -373,10 +373,15 @@ struct SidebarView: View {
                     .font(.system(size: 13))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                 Spacer()
-                Text("\(model.scopeAgentCount)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textGhost)
-                    .frame(minWidth: 20)
+                SidebarSessionIndexSlot(
+                    visible: sessionIndexHints.isShowingSpaces,
+                    number: model.spaceSwitchNumber(for: nil)
+                ) {
+                    Text("\(model.scopeAgentCount)")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textGhost)
+                        .frame(minWidth: 20)
+                }
             }
             .padding(.horizontal, 8)
             .frame(height: 30)
@@ -1063,6 +1068,7 @@ private struct SpaceRowView: View {
     let entry: AppModel.SpaceEntry
     @ObservedObject var model: AppModel
     let isEmpty: Bool
+    var showIndexHints = false
     @Binding var draggingSpaceID: String?
     @Binding var spaceDrop: (id: String, after: Bool)?
     @State private var hovered = false
