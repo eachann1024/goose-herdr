@@ -62,6 +62,11 @@ enum MobileGhosttyRuntime {
         let dark = TerminalConfiguration { builder in
             builder.withBackground(backgroundHex)
             builder.withForeground(foregroundHex)
+            // Same product accent as Mac `Theme.accent` dark. Ghostty cannot
+            // take a dynamic Color; unset selection inverts `#101012` to a
+            // near-white wash on its clear Metal layer.
+            builder.withSelectionBackground("#E2795B")
+            builder.withSelectionForeground(backgroundHex)
             for (index, color) in palette.enumerated() {
                 builder.withPalette(index, color: hex(color))
             }
