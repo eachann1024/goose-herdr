@@ -17,6 +17,9 @@ class Model {
     let defaults = UserDefaults(suiteName: "unread-selection-" + UUID().uuidString)!
     var unreadAgents: Set<AgentUnreadKey> = []
     func noteSelectedAttachSession() {}
+    func notePrioritySelection(from previous: PaneRef?) {}
+    struct PiLaunch { var pane: PaneRef?; var presented = true }
+    var piLaunch: PiLaunch?
 ''' + selection + r'''
 }
 let model = Model()
