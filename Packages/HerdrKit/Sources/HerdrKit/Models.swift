@@ -41,6 +41,9 @@ public struct AgentInfo: Codable, Sendable, Identifiable, Equatable {
     public let focused: Bool?
     public let cwd: String?
     public let revision: Int?
+    public let stateChangeSeq: UInt64?
+    public let launchPending: Bool?
+    public let interactiveReady: Bool?
 
     public var id: String { paneID }
     public var status: AgentStatus { AgentStatus(wire: agentStatusRaw) }
@@ -62,7 +65,10 @@ public struct AgentInfo: Codable, Sendable, Identifiable, Equatable {
             paneID: paneID,
             focused: focused,
             cwd: cwd,
-            revision: revision
+            revision: revision,
+            stateChangeSeq: stateChangeSeq,
+            launchPending: launchPending,
+            interactiveReady: interactiveReady
         )
     }
 
@@ -160,6 +166,9 @@ public struct AgentInfo: Codable, Sendable, Identifiable, Equatable {
         case focused
         case cwd
         case revision
+        case stateChangeSeq = "state_change_seq"
+        case launchPending = "launch_pending"
+        case interactiveReady = "interactive_ready"
     }
 }
 
