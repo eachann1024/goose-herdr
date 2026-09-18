@@ -1351,9 +1351,39 @@ final class AppModel: ObservableObject {
         }
     }
 
+    enum SwitchableSpace: Equatable {
+        case all
+        case space(SpaceRef)
+    }
+
+    /// All Spaces first, then sidebar space order. Scoped by the device filter.
+    var switchableSpaces: [SwitchableSpace] {
+        [.all] + visibleSpaces.map { .space($0.ref) }
+    }
+
+    func spaceSwitchNumber(for ref: SpaceRef?) -> Int? {
+        let items = switchableSpaces
+        let target: SwitchableSpace = ref.map { .space($0) } ?? .all
+        guard let index = items.firstIndex(of: target) else { return nil }
+        return SpaceSwitchIndex.number(forIndex: index, count: items.count)
+    }
+
+    /// ⌃1 is All Spaces; ⌃2…9,0 follow sidebar space order.
+    func selectSwitchableSpace(number: Int) {
+        let items = switchableSpaces
+        guard let index = SpaceSwitchIndex.index(forNumber: number, count: items.count) else { return }
+        switch items[index] {
+        case .all:
+            selectSpace(nil)
+        case .space(let ref):
+            activateSpace(ref)
+        }
+    }
+
     // MARK: - Lifecycle
 
     func start() {
+        usage.start { [weak self] in self?.session(Device.local.id).agentCatalog.kinds ?? [] }
         NotificationManager.shared.setup(model: self)
         // Finder-launched apps have launchd's PATH. Capture the login +
         // interactive shell environment on a background thread once; New Agent
