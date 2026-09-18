@@ -163,8 +163,35 @@ enum AgentBinaryOverrides {
     }
 }
 
+/// What the New Session sheet can create. `.choose` — the sidebar's plus — shows
+/// the type section; a shortcut that already fixed the type (⌘T → `.terminal`,
+/// an Agent kind → `.agent`) hides it and only asks for the space.
+enum NewSessionType: Equatable, Identifiable {
+    case choose
+    case terminal
+    case agent(String)
+
+    var id: String {
+        switch self {
+        case .choose: return "choose"
+        case .terminal: return "terminal"
+        case .agent(let kind): return "agent:\(kind)"
+        }
+    }
+}
+
+/// A workspace herdr just created, with the root shell it came with. That shell
+/// is herdr's, not a tab this app opened: a launch that fails must leave it
+/// alone, and a session that opens in the new space reuses it instead of
+/// stacking a second tab on a space that is seconds old.
+struct CreatedSpace {
+    let ref: SpaceRef
+    let rootPaneID: String?
+}
+
 @MainActor
 final class AppModel: ObservableObject {
+    let usage = UsagePanelModel()
     @Published var devices: [Device]
     /// All devices stay connected in parallel; this only filters the sidebar.
     @Published var deviceFilter: UUID? {
@@ -249,8 +276,12 @@ final class AppModel: ObservableObject {
     @Published var showAddDevice = false
     @Published var showNewSpace = false
     @Published var showNewItem = false
+    /// Non-nil while the New Session sheet is up.
+    @Published var newSession: NewSessionType?
     @Published var showSearch = false
-    @Published var isFileManagerActive = false
+    @Published var isFileManagerActive = false {
+        didSet { if isFileManagerActive { piLaunch?.presented = false } }
+    }
     private var closingSplitWorkspaces: Set<SpaceRef> = []
     @Published var splitTrees: [String: TerminalSplitTree] = [:]
     struct SplitShell: Identifiable {
