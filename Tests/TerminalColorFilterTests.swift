@@ -9,8 +9,8 @@ struct TerminalColorFilterTests {
         let transformed = adapter.transform(source[...])
         let result = String(decoding: transformed, as: UTF8.self)
 
-        expect(result.contains("38;2;25;25;25"), "light foreground should become dark")
-        expect(result.contains("48;2;225;225;225"), "dark input background should become light")
+        expect(result.contains("38;2;230;230;230"), "explicit truecolor foreground must be preserved")
+        expect(result.contains("48;2;30;30;30"), "explicit truecolor background must be preserved")
 
         var resetAdapter = LightTerminalANSIAdapter()
         let resetResult = String(decoding: resetAdapter.transform(Array("\u{1B}[0m".utf8)[...]), as: UTF8.self)
@@ -21,8 +21,8 @@ struct TerminalColorFilterTests {
         let second = Array("30;30mafter".utf8)
         let splitResult = splitAdapter.transform(first[...]) + splitAdapter.transform(second[...])
         expect(
-            String(decoding: splitResult, as: UTF8.self) == "before\u{1B}[48;2;225;225;225mafter",
-            "split escape sequences should be transformed without corruption"
+            String(decoding: splitResult, as: UTF8.self) == "before\u{1B}[48;2;30;30;30mafter",
+            "split truecolor escape sequences should pass through without corruption"
         )
 
         // Agent TUI copy actions arrive through the PTY as OSC 52. The light
@@ -68,7 +68,7 @@ struct TerminalColorFilterTests {
         let powerlineResult = String(decoding: powerlineAdapter.transform(powerline[...]), as: UTF8.self)
         expect(
             powerlineResult.contains("48;2;250;179;135;38;2;243;139;168m\u{E0B0}"),
-            "powerline foreground should retain the neighboring segment color"
+            "powerline truecolor should retain the neighboring segment color"
         )
         expect(
             powerlineResult.contains("38;2;17;17;27mpath"),
@@ -84,8 +84,8 @@ struct TerminalColorFilterTests {
             as: UTF8.self
         )
         expect(
-            darkPowerlineResult.contains("48;2;225;225;225;38;2;225;225;225m\u{E0B0}"),
-            "a dark powerline separator should follow the flipped neighboring background"
+            darkPowerlineResult.contains("48;2;30;30;30;38;2;30;30;30m\u{E0B0}"),
+            "a truecolor powerline separator should retain its neighboring background"
         )
 
         // The separator and its UTF-8 bytes may arrive in separate PTY reads.
@@ -102,8 +102,8 @@ struct TerminalColorFilterTests {
             "split powerline glyphs should retain their layered foreground"
         )
 
-        // Foregrounds that already read well on white keep their color;
-        // only dark backgrounds flip.
+        // Explicit truecolor foregrounds that already read well on white keep
+        // their color; all explicit RGB values are now preserved.
         var keepAdapter = LightTerminalANSIAdapter()
         let darkRed = Array("\u{1B}[38;2;220;50;47merror".utf8)
         expect(

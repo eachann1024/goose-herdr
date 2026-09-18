@@ -93,7 +93,8 @@ struct LightTerminalANSIAdapter {
     ///
     /// Foregrounds keep whichever variant reads better on white — same rule
     /// as the ANSI palette, so an already-dark foreground (diff red, syntax
-    /// blue) doesn't wash out to a pastel.
+    /// blue) doesn't wash out to a pastel. Explicit truecolor is never passed
+    /// through this helper: applications own those RGB values.
     static func adapt(red: Int, green: Int, blue: Int, isBackground: Bool) -> (red: Int, green: Int, blue: Int) {
         let flipped = lightRGB(red: red, green: green, blue: blue)
         if isBackground {
@@ -185,18 +186,13 @@ struct LightTerminalANSIAdapter {
             let isColor = values[index] == "38" || values[index] == "48"
             let isBackground = values[index] == "48"
             if isColor, index + 4 < values.count, values[index + 1] == "2",
-               let red = Int(values[index + 2]),
-               let green = Int(values[index + 3]),
-               let blue = Int(values[index + 4]),
-               (0...255).contains(red), (0...255).contains(green), (0...255).contains(blue) {
-                let light = preservePowerlineForeground && !isBackground
-                    // Separator foregrounds are neighboring backgrounds, so
-                    // use the background transform rather than the text
-                    // contrast transform. This also keeps dark prompts
-                    // internally consistent after their backgrounds flip.
-                    ? Self.adapt(red: red, green: green, blue: blue, isBackground: true)
-                    : Self.adapt(red: red, green: green, blue: blue, isBackground: isBackground)
-                output += [values[index], "2", String(light.red), String(light.green), String(light.blue)]
+                      Int(values[index + 2]).map({ (0...255).contains($0) }) == true,
+                      Int(values[index + 3]).map({ (0...255).contains($0) }) == true,
+                      Int(values[index + 4]).map({ (0...255).contains($0) }) == true {
+                // Truecolor is an explicit application choice. Rewriting it
+                // breaks Pi/Claude/Codex components that intentionally use
+                // their own RGB contrast and background relationships.
+                output += values[index...(index + 4)]
                 index += 5
             } else if isColor, index + 2 < values.count, values[index + 1] == "5",
                       let paletteIndex = Int(values[index + 2]),
