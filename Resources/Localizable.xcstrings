@@ -1689,22 +1689,6 @@
         }
       }
     },
-    "Create a space on this device before opening a terminal.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create a space on this device before opening a terminal."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "请先在此设备上创建空间，然后再打开终端。"
-          }
-        }
-      }
-    },
     "Credit expires": {
       "localizations": {
         "en": {
