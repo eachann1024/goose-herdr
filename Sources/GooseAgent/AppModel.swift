@@ -1903,7 +1903,9 @@ final class AppModel: ObservableObject {
                     }
                 }
                 if selectedPane == nil {
-                    selectedPane = preferredVisibleAgent()?.ref ?? firstVisiblePaneRef
+                    selectedPane = ([preferredVisibleAgent()?.ref, firstVisiblePaneRef].compactMap { $0 }
+                        + visibleSessions.map(\.ref))
+                        .first { !startingPanes.contains($0) }
                 }
             }
             // A restored selection predates its snapshot, so its attach could not
