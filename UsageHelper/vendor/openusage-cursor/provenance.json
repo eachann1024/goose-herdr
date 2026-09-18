@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/Noisemaker111/openusage-opencode",
+  "commit": "b9a595f96f976ebf262a2e3d8f94377238925ca5",
+  "source": "plugins/cursor/plugin.js",
+  "sourceSHA256": "961286cd9cc9666a89ca9b17069bb62341b21e2d4565740fb50e5efedd03ac53",
+  "protocolReference": "docs/providers/cursor.md",
+  "adaptation": "../../host/cursor.mjs adapts the IDE access-token key, modern Connect RPC request and plan cents mapping; not a byte-identical transplant. Native node:sqlite readonly, explicit consent, no redirects, strict finite/optional fields and redacted failures replace host APIs and permissive defaults. Token refresh/writeback, browser/constructed cookies, enterprise legacy requests, credits and pooled on-demand are deliberately omitted.",
+  "license": "MIT; full notice in LICENSE"
+}
