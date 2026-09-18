@@ -578,6 +578,106 @@ public actor HerdrService {
         )
     }
 
+    /// `agent.start` already submits the kind. Only wait for the TUI; do not
+    /// send extra Enter, or Pi's composer fills with blank lines.
+    @discardableResult
+    public func waitForStartedAgent(kind: String, paneID: String) async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: Self.agentAppearanceTimeout)
+        while clock.now < deadline, !Task.isCancelled {
+            let info = (try? await agents())?.first(where: { $0.paneID == paneID })
+            if Task.isCancelled { return false }
+            if info?.interactiveReady == true { return true }
+            if kind != "pi", info?.launchPending == false, info?.agentKindRaw != nil { return true }
+            // An explicit not-ready signal wins over shell banners or old output.
+            if info?.interactiveReady == nil,
+               let plain = (try? await readPane(paneID: paneID).text).map(Self.stripANSI),
+               Self.looksLikeStartedAgent(plain, kind: kind) {
+                return !Task.isCancelled
+            }
+            do { try await Task.sleep(for: .milliseconds(150)) }
+            catch { return false }
+        }
+        return false
+    }
+
+    static let agentAppearanceTimeout: Duration = .seconds(10)
+
+    public static func stripANSI(_ text: String) -> String {
+        var out = ""
+        var i = text.startIndex
+        while i < text.endIndex {
+            if text[i] == "\u{1B}" {
+                let next = text.index(after: i)
+                guard next < text.endIndex else { break }
+                if text[next] == "[" {
+                    var j = text.index(after: next)
+                    while j < text.endIndex {
+                        let c = text[j]
+                        j = text.index(after: j)
+                        if ("@"..."~").contains(c) { break }
+                    }
+                    i = j
+                    continue
+                }
+                if text[next] == "]" {
+                    var j = text.index(after: next)
+                    while j < text.endIndex {
+                        let c = text[j]
+                        j = text.index(after: j)
+                        if c == "\u{7}" { break }
+                        if c == "\\" {
+                            let before = text.index(before: text.index(before: j))
+                            if text[before] == "\u{1B}" { break }
+                        }
+                    }
+                    i = j
+                    continue
+                }
+                i = text.index(after: next)
+                continue
+            }
+            out.append(text[i])
+            i = text.index(after: i)
+        }
+        return out
+    }
+
+    public static func lastMeaningfulLine(_ plain: String) -> String {
+        plain.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .last { !$0.isEmpty } ?? ""
+    }
+
+    public static func commandAfterPrompt(_ line: String) -> String {
+        var rest = line.trimmingCharacters(in: .whitespaces)
+        for prefix in ["❯", "➜", "$", "%"] where rest.hasPrefix(prefix) {
+            rest = String(rest.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+            break
+        }
+        return rest
+    }
+
+    public static func looksLikeLeftoverLaunchCommand(_ plain: String, kind: String) -> Bool {
+        commandAfterPrompt(lastMeaningfulLine(plain)).caseInsensitiveCompare(kind) == .orderedSame
+    }
+
+    public static func looksLikeBareShell(_ plain: String) -> Bool {
+        let lines = plain.split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if lines.isEmpty { return true }
+        return lines.allSatisfy { line in
+            if line == "~" { return true }
+            let command = commandAfterPrompt(line)
+            return command.isEmpty || command.hasPrefix("/") || command.hasPrefix("~")
+        }
+    }
+
+    public static func looksLikeStartedAgent(_ plain: String, kind: String) -> Bool {
+        !looksLikeLeftoverLaunchCommand(plain, kind: kind) && !looksLikeBareShell(plain)
+    }
+
     public func closePane(paneID: String) async throws {
         _ = try await client().request(method: "pane.close", params: .object(["pane_id": .string(paneID)]))
     }
