@@ -355,6 +355,14 @@ struct DetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.contentBackground.ignoresSafeArea())
+        .task(id: model.gitMetadataTaskKey) {
+            guard let entry = model.selectedAttachedEntry else { return }
+            while !Task.isCancelled {
+                await model.refreshGitMetadata(for: entry)
+                do { try await Task.sleep(for: .seconds(5)) }
+                catch { return }
+            }
+        }
     }
 
     private var detailContent: some View {
@@ -422,20 +430,20 @@ struct DetailView: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                             .layoutPriority(1)
-                            .help((agent.cwd as NSString?)?.abbreviatingWithTildeInPath ?? "")
+                            .codexTooltip(verbatim: (agent.cwd as NSString?)?.abbreviatingWithTildeInPath ?? "")
                         Spacer(minLength: 12)
                         AgentKindBadge(kind: agent.agent)
                         Text("\u{b7}")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.textGhost)
-                        Text(model.spaceName(deviceID: entry.device.id, workspaceID: agent.workspaceID))
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textTertiary)
-                            .lineLimit(1)
+                        gitMetadataView(
+                            for: attached,
+                            spaceName: model.spaceName(deviceID: entry.device.id, workspaceID: agent.workspaceID)
+                        )
                         if model.showsRowDeviceBadges {
                             DeviceChip(device: entry.device)
                         }
-                        statusPill(agent.status)
+                        paneLocationButton(agent.paneID)
                     case .terminal(let entry):
                         Image(systemName: "terminal")
                             .font(.system(size: 12, weight: .semibold))
@@ -445,15 +453,16 @@ struct DetailView: View {
                             .foregroundStyle(Theme.text)
                             .lineLimit(1)
                             .layoutPriority(1)
-                            .help((entry.pane.cwd as NSString?)?.abbreviatingWithTildeInPath ?? "")
+                            .codexTooltip(verbatim: (entry.pane.cwd as NSString?)?.abbreviatingWithTildeInPath ?? "")
                         Spacer(minLength: 12)
-                        Text(model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID))
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(Theme.textTertiary)
-                            .lineLimit(1)
+                        gitMetadataView(
+                            for: attached,
+                            spaceName: model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID)
+                        )
                         if model.showsRowDeviceBadges {
                             DeviceChip(device: entry.device)
                         }
+                        paneLocationButton(entry.pane.paneID)
                     }
                 } else {
                     Text("No terminal selected")
@@ -468,6 +477,56 @@ struct DetailView: View {
         .padding(.trailing, 12)
         .frame(height: TitlebarMetrics.height)
         .windowTitlebarInteraction(alignsWindowButtons: true)
+    }
+
+    private func paneLocationButton(_ paneID: String) -> some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(paneID, forType: .string)
+        } label: {
+            Text(verbatim: paneID)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(Theme.textTertiary)
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("Copy Herdr location") + Text(verbatim: " \(paneID)"))
+        .codexTooltip("Copy Herdr location")
+    }
+
+    @ViewBuilder
+    private func gitMetadataView(for entry: AppModel.AttachedEntry, spaceName: String) -> some View {
+        Text(spaceName)
+            .font(.system(size: 11.5))
+            .foregroundStyle(Theme.textTertiary)
+            .lineLimit(1)
+        if let info = model.gitRepositoryInfo(for: entry.ref) {
+            if info.branch != nil || info.isWorktree {
+                Text(verbatim: "·")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textGhost)
+            }
+            if let branch = info.branch {
+                Text(verbatim: branch)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .layoutPriority(0)
+            }
+            if info.isWorktree {
+                Text("Worktree")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.textTertiary)
+                    .padding(.horizontal, 4)
+                    .frame(height: 18)
+                    .background(Theme.textTertiary.opacity(0.12), in: Capsule())
+                Text(verbatim: info.repositoryName)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textTertiary)
+                    .lineLimit(1)
+                    .codexTooltip(verbatim: info.repositoryName)
+            }
+        }
     }
 
     @ViewBuilder
