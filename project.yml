@@ -38,6 +38,13 @@ targets:
         product: HerdrTailcat
       - package: GhosttyTerminal
         product: GhosttyTerminal
+    postBuildScripts:
+      - name: Package usage helper
+        basedOnDependencyAnalysis: false
+        script: |
+          for arch in $ARCHS; do
+            bash "$SRCROOT/scripts/package-usage-helper.sh" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/UsageHelper" "$arch"
+          done
     info:
       path: Sources/GooseAgent/Info.plist
       properties:
