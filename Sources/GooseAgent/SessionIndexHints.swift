@@ -190,7 +190,7 @@ struct SessionIndexHint: View {
         Text(String(number))
             .font(.system(size: 11, weight: .semibold).monospacedDigit())
             .foregroundStyle(Theme.textSecondary)
-            .frame(width: 12, height: 12)
+            .frame(width: 20, height: 12)
             .minimumScaleFactor(0.8)
             .accessibilityHidden(true)
     }
