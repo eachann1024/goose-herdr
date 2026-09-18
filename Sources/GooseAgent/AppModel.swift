@@ -178,6 +178,9 @@ final class AppModel: ObservableObject {
     }
     private static let deviceFilterKey = "device.filter"
     @Published var sessions: [UUID: DeviceSessionState] = [:]
+    /// Git metadata is fetched from the selected pane's own cwd and discarded when
+    /// selection changes; it is never inferred from the app or repository cwd.
+    @Published private(set) var gitMetadataByPane: [PaneRef: HerdrService.GitRepositoryInfo] = [:]
     @Published var selectedSpace: SpaceRef? {
         didSet {
             // Async creation/refresh cannot restore a filter with no visible control.
@@ -888,6 +891,41 @@ final class AppModel: ObservableObject {
 
     func spaceName(deviceID: UUID, workspaceID: String) -> String {
         session(deviceID).workspaces.first { $0.workspaceID == workspaceID }?.label ?? workspaceID
+    }
+
+    var gitMetadataTaskKey: String? {
+        guard let entry = selectedAttachedEntry,
+              let cwd = gitWorkingDirectory(for: entry), !cwd.isEmpty else { return nil }
+        return "\(entry.ref.deviceID.uuidString):\(entry.ref.paneID):\(cwd)"
+    }
+
+    func gitRepositoryInfo(for ref: PaneRef) -> HerdrService.GitRepositoryInfo? {
+        gitMetadataByPane[ref]
+    }
+
+    func refreshGitMetadata(for entry: AttachedEntry) async {
+        guard let cwd = gitWorkingDirectory(for: entry), !cwd.isEmpty else {
+            gitMetadataByPane.removeValue(forKey: entry.ref)
+            return
+        }
+        let info = await service(for: entry.device).gitRepositoryInfo(at: cwd)
+        guard !Task.isCancelled,
+              selectedAttachedEntry?.ref == entry.ref,
+              selectedAttachedEntry.flatMap({ gitWorkingDirectory(for: $0) }) == cwd else { return }
+        if let info {
+            gitMetadataByPane[entry.ref] = info
+        } else {
+            gitMetadataByPane.removeValue(forKey: entry.ref)
+        }
+    }
+
+    private func gitWorkingDirectory(for entry: AttachedEntry) -> String? {
+        if let cwd = session(entry.ref.deviceID).panes.first(where: { $0.paneID == entry.ref.paneID })?.cwd,
+           !cwd.isEmpty { return cwd }
+        switch entry {
+        case .agent(let entry): return entry.agent.cwd
+        case .terminal(let entry): return entry.pane.cwd
+        }
     }
 
     /// Show device badges only when more than one device is configured.
