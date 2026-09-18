@@ -862,6 +862,10 @@ struct ShortcutsSettingsView: View {
                 beginRecordingGeneral(id)
             }
             Button(String(localized: "Reset")) {
+                if let taken = AppShortcuts.isChordTaken(id.defaultChord, excludingGeneral: id) {
+                    conflictText = String(format: String(localized: "Conflicts with %@. Choose another."), taken)
+                    return
+                }
                 AppShortcuts.reset(id)
                 conflictText = nil
             }
@@ -895,6 +899,11 @@ struct ShortcutsSettingsView: View {
                 beginRecordingAgent(kind)
             }
             Button(String(localized: "Reset")) {
+                if let chord = AgentKindShortcuts.defaultChord(for: kind),
+                   let taken = AppShortcuts.isChordTaken(chord, excludingAgentKind: kind) {
+                    conflictText = String(format: String(localized: "Conflicts with %@. Choose another."), taken)
+                    return
+                }
                 AgentKindShortcuts.set(nil, for: kind)
                 conflictText = nil
             }
