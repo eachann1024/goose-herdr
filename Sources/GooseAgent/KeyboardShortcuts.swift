@@ -28,6 +28,22 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Pane focus, swap, and resize — collapsed under Settings → Shortcuts → Advanced.
+    var isAdvanced: Bool {
+        switch self {
+        case .focusLeft, .focusRight, .focusUp, .focusDown,
+             .swapLeft, .swapRight, .swapUp, .swapDown,
+             .widenPane, .narrowPane, .growPane, .shrinkPane,
+             .equalizeSplits:
+            return true
+        default:
+            return false
+        }
+    }
+
+    static var primaryCases: [Self] { allCases.filter { !$0.isAdvanced } }
+    static var advancedCases: [Self] { allCases.filter(\.isAdvanced) }
+
     var title: LocalizedStringKey {
         switch self {
         case .newItem: return "New"
