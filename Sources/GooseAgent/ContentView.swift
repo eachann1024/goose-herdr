@@ -87,19 +87,23 @@ struct RootView: View {
         .ignoresSafeArea(.container, edges: .top)
         .frame(minWidth: 980, minHeight: 620)
         .herdrmHideFocusRing()
-        .onAppear { model.start() }
+        .onAppear {
+            TooltipDismissal.install()
+            model.start()
+        }
         .onChange(of: spacesHidden, initial: true) { _, _ in
             model.synchronizeSpaceVisibility()
         }
         .sheet(isPresented: $model.showAddDevice) { AddDeviceSheet(model: model) }
-        .sheet(isPresented: $model.showNewItem, onDismiss: { model.showNewItem = false }) {
-            NewItemSheet(model: model)
-        }
         .task(id: model.showNewSpace) { await prepareNewSpace() }
         .sheet(item: $newSpaceListing, onDismiss: { model.showNewSpace = false }) { listing in
             NewSpaceSheet(model: model, listing: listing)
         }
         .sheet(item: $model.spaceToRename) { entry in RenameSpaceSheet(model: model, entry: entry) }
+        .sheet(isPresented: $model.showNewItem, onDismiss: { model.showNewItem = false }) {
+            NewItemSheet(model: model)
+        }
+        .sheet(item: $model.newSession) { request in NewSessionSheet(model: model, request: request) }
         .sheet(item: $model.agentToRename) { entry in RenameAgentSheet(model: model, entry: entry) }
         .sheet(item: $model.terminalToRename) { entry in RenameTerminalSheet(model: model, entry: entry) }
         .sheet(item: $model.deviceToEdit) { device in EditDeviceSheet(model: model, device: device) }
