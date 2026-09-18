@@ -4,11 +4,26 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-source = (Path(__file__).resolve().parents[1] / "Sources/GooseAgent/SessionIndexHints.swift").read_text()
+ROOT = Path(__file__).resolve().parents[1]
+source = (ROOT / "Sources/GooseAgent/SessionIndexHints.swift").read_text()
+sidebar = (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text()
 start = source.index("enum SessionSwitchIndex {")
 end = source.index("\n    // MARK: - Session index hints")
 mapping = source[start:end] + "\n}\n"
 assert "milliseconds(150)" in mapping
+assert "var keepsStatus = false" in source
+assert "if keepsStatus" in source
+command = source[source.index("case .command:"):source.index("case .control:")]
+assert "isShowing = true" in command
+assert "isShowingSpaces = true" not in command
+control = source[source.index("case .control:"):source.index("private func reset()")]
+assert "isShowingSpaces = true" in control
+assert "isShowing = true" not in control
+assert ".frame(width: 20, height: 12)" in source
+assert ".opacity(visible ? 1 : 0)" in source
+assert ".opacity(visible && number != nil ? 0 : 1)" in source
+assert ".frame(minWidth: 20)\n                .overlay" in source
+assert sidebar.count("keepsStatus: true") == 3
 
 harness = r'''
 import Foundation

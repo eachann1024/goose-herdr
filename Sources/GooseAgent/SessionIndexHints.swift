@@ -24,21 +24,52 @@ enum SessionSwitchIndex {
     // MARK: - Session index hints
 
     static func isCommandOnly(_ flags: NSEvent.ModifierFlags) -> Bool {
+        exclusiveModifier(flags) == .command
+    }
+
+    static func isControlOnly(_ flags: NSEvent.ModifierFlags) -> Bool {
+        exclusiveModifier(flags) == .control
+    }
+
+    private static func exclusiveModifier(_ flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
         flags
             .intersection(.deviceIndependentFlagsMask)
-            .intersection([.command, .shift, .option, .control]) == .command
+            .intersection([.command, .shift, .option, .control])
+    }
+}
+
+/// Keyboard-row ⌃1…9,0: first 10 sidebar spaces. 0 is the 10th item, not last.
+enum SpaceSwitchIndex {
+    static func number(forIndex index: Int, count: Int) -> Int? {
+        guard count > 0, index >= 0, index < count, index < 10 else { return nil }
+        return index == 9 ? 0 : index + 1
+    }
+
+    static func index(forNumber number: Int, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        let index: Int
+        switch number {
+        case 0: index = 9
+        case 1...9: index = number - 1
+        default: return nil
+        }
+        return index < count ? index : nil
     }
 }
 
 @MainActor
 final class SessionIndexHintController: ObservableObject {
     @Published private(set) var isShowing = false
+    @Published private(set) var isShowingSpaces = false
+
+    private enum HoldKind { case command, control }
 
     private var monitor: Any?
     private var activateObserver: NSObjectProtocol?
     private var resignObserver: NSObjectProtocol?
     private var pollTimer: Timer?
     private var holdStartedAt: Date?
+    private var holdKind: HoldKind?
 
     init() {
         start()
@@ -113,24 +144,42 @@ final class SessionIndexHintController: ObservableObject {
     }
 
     private func sync(flags: NSEvent.ModifierFlags) {
-        guard NSApp.isActive, SessionSwitchIndex.isCommandOnly(flags) else {
+        guard NSApp.isActive else {
             reset()
             return
         }
-        if holdStartedAt == nil {
-            holdStartedAt = Date()
+        let kind: HoldKind?
+        if SessionSwitchIndex.isCommandOnly(flags) {
+            kind = .command
+        } else if SessionSwitchIndex.isControlOnly(flags) {
+            kind = .control
+        } else {
+            kind = nil
         }
-        guard !isShowing else { return }
-        if Date().timeIntervalSince(holdStartedAt!) >= SessionSwitchIndex.holdInterval {
-            isShowing = true
+        guard let kind else {
+            reset()
+            return
+        }
+        if holdKind != kind {
+            holdKind = kind
+            holdStartedAt = Date()
+            if isShowing { isShowing = false }
+            if isShowingSpaces { isShowingSpaces = false }
+        }
+        guard Date().timeIntervalSince(holdStartedAt!) >= SessionSwitchIndex.holdInterval else { return }
+        switch kind {
+        case .command:
+            if !isShowing { isShowing = true }
+        case .control:
+            if !isShowingSpaces { isShowingSpaces = true }
         }
     }
 
     private func reset() {
+        holdKind = nil
         holdStartedAt = nil
-        if isShowing {
-            isShowing = false
-        }
+        if isShowing { isShowing = false }
+        if isShowingSpaces { isShowingSpaces = false }
     }
 }
 
@@ -150,13 +199,28 @@ struct SessionIndexHint: View {
 struct SidebarSessionIndexSlot<Status: View>: View {
     var visible: Bool
     let number: Int?
+    /// 会话行保留状态点；空间行用位次替换数量。
+    var keepsStatus = false
     @ViewBuilder var status: () -> Status
 
     var body: some View {
-        if visible, let number {
-            SessionIndexHint(number: number)
+        if keepsStatus {
+            HStack(spacing: 4) {
+                status()
+                if let number {
+                    SessionIndexHint(number: number)
+                        .opacity(visible ? 1 : 0)
+                }
+            }
         } else {
             status()
+                .opacity(visible && number != nil ? 0 : 1)
+                .frame(minWidth: 20)
+                .overlay {
+                    if visible, let number {
+                        SessionIndexHint(number: number)
+                    }
+                }
         }
     }
 }
