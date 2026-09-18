@@ -56,6 +56,10 @@ class Model {
     func device(_ id: UUID) -> Device? { devices.first { $0.id == id } }
     func isRetainedSpace(_ ref: SpaceRef) -> Bool { false }
     func preferredVisibleAgent() -> Entry? { nil }
+    func notePrioritySelection(from previous: PaneRef?) {}
+    func selectSpaceAfterClosing(_ ref: SpaceRef, previousOrder: [SpaceRef]) {
+        if selectedSpace == ref { selectedSpace = nil }
+    }
 ''' + space_selection + '\n' + selection + '\n' + register + '\n' + initializer + r'''
     func afterDiscovery() {
 ''' + validation + r'''
@@ -66,6 +70,7 @@ class Model {
         available.formUnion(panes.map { PaneRef(deviceID: deviceID, paneID: $0) })
         let snapshot = Snapshot(focusedPaneID: focused)
         let mergedWorkspaces: [Workspace] = workspaces.map { Workspace(workspaceID: $0) }
+        let previousSpaceOrder = workspaces.map { SpaceRef(deviceID: deviceID, workspaceID: $0) }
 ''' + refresh + r'''
     }
 }

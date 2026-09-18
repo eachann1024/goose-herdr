@@ -365,10 +365,10 @@ enum NewSessionType: Equatable {
         let suite = "goose-herdr-space-route-check"
         let store = UserDefaults(suiteName: suite)!
         store.removePersistentDomain(forName: suite)
-        assert(AppShortcuts.chord(for: .newItem, store: store) == KeyChord(key: "n", modifiers: [.command, .shift]),
-               "New default is shift-cmd-N")
-        assert(AppShortcuts.chord(for: .quickNewTerminal, store: store) == KeyChord(key: "t", modifiers: .command),
-               "New Terminal default is cmd-T")
+        assert(AppShortcuts.chord(for: .newItem, store: store) == KeyChord(key: "t", modifiers: .command),
+               "New default is cmd-T")
+        assert(AppShortcuts.chord(for: .quickNewTerminal, store: store) == KeyChord(key: "t", modifiers: [.command, .shift]),
+               "New Terminal default is shift-cmd-T")
         assert(AppShortcuts.chord(for: .newSpace, store: store) == KeyChord(key: "n", modifiers: .command),
                "New Space default is cmd-N")
         assert(AppShortcuts.chord(for: .close, store: store) == KeyChord(key: "w", modifiers: .command),
@@ -410,7 +410,7 @@ enum NewSessionType: Equatable {
         let legacyStore = ["quickNewAgent": KeyChord(key: "n", modifiers: [.command, .shift]),
                            "newAgent": KeyChord(key: "a", modifiers: [.command])]
         store.set(try! JSONEncoder().encode(legacyStore), forKey: AppShortcuts.storageKey)
-        assert(AppShortcuts.chord(for: .quickNewTerminal, store: store) == KeyChord(key: "t", modifiers: .command),
+        assert(AppShortcuts.chord(for: .quickNewTerminal, store: store) == KeyChord(key: "t", modifiers: [.command, .shift]),
                "a retired New Agent entry does not shadow New Terminal")
         AppShortcuts.set(KeyChord(key: "j", modifiers: [.command, .shift]), for: .quickNewTerminal, store: store)
         AppShortcuts.set(KeyChord(key: "b", modifiers: [.command, .control]), for: .newSpace, store: store)
@@ -440,10 +440,12 @@ assert "showNewItem" in source, "New panel is a distinct sheet flag"
 assert "case newItem" in shortcuts, "New is a general shortcut above New Terminal"
 assert commands.index('Button("New") { focusedModel?.showNewItem = true }') < commands.index(
     'Button("New Terminal") { focusedModel?.quickNewTerminal() }'
-), "File menu lists New above New Terminal"assert "func createNewSession(" in source, "the New Session sheet confirms through one path"
+), "File menu lists New above New Terminal"
+assert "func createNewSession(" in source, "the New Session sheet confirms through one path"
 assert 'newSession = .choose' in (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text(), (
     "the Priority sessions header plus opens the session sheet"
-)assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
+)
+assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
 assert "0.5" in source[source.index("func requestCreatedSessionFocus("):source.index("func focusSplit(")], "slow attach needs a late focus retry"
 root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()
 assert "struct NewItemSheet" in root_view, "New panel lives next to New Space"

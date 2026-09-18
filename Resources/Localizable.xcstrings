@@ -3702,22 +3702,6 @@
         }
       }
     },
-    "No terminals — click to create one": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No terminals — click to create one"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "没有终端，点击可新建"
-          }
-        }
-      }
-    },
     "Not connected": {
       "localizations": {
         "en": {
@@ -6022,22 +6006,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "此空间没有终端"
-          }
-        }
-      }
-    },
-    "This space has no terminals. Click the space name to create one.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This space has no terminals. Click the space name to create one."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此空间没有终端。点击侧栏中的空间名称可新建。"
           }
         }
       }
