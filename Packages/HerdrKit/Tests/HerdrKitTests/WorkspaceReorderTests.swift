@@ -54,4 +54,49 @@ final class WorkspaceReorderTests: XCTestCase {
             moving: "Z", onto: "A", placeAfter: false, orderedIDs: order
         ))
     }
+
+    // A closed space kept as a sidebar placeholder keeps its dead workspace_id;
+    // herdr rejects it with workspace_not_found, so it never goes on the wire.
+
+    func testPlaceholderMoveNeedsNoBackendCall() {
+        XCTAssertNil(WorkspaceReorder.liveMove(
+            moving: "P",
+            previousOrder: ["A", "P", "B"],
+            newOrder: ["A", "B", "P"],
+            isLive: { $0 != "P" }
+        ))
+    }
+
+    func testLiveRowCrossingAPlaceholderNeedsNoBackendCall() {
+        XCTAssertNil(WorkspaceReorder.liveMove(
+            moving: "A",
+            previousOrder: ["A", "P", "B"],
+            newOrder: ["P", "A", "B"],
+            isLive: { $0 != "P" }
+        ))
+    }
+
+    func testLiveMoveInsertsBeforeTheNextLiveRow() {
+        XCTAssertEqual(
+            WorkspaceReorder.liveMove(
+                moving: "C",
+                previousOrder: ["A", "B", "P", "C"],
+                newOrder: ["C", "A", "B", "P"],
+                isLive: { $0 != "P" }
+            ),
+            WorkspaceReorder.Plan(workspaceIDs: ["C"], beforeWorkspaceID: "A")
+        )
+    }
+
+    func testLiveMoveToTheEndHasNoBeforeRow() {
+        XCTAssertEqual(
+            WorkspaceReorder.liveMove(
+                moving: "A",
+                previousOrder: ["A", "B", "P"],
+                newOrder: ["B", "P", "A"],
+                isLive: { $0 != "P" }
+            ),
+            WorkspaceReorder.Plan(workspaceIDs: ["A"], beforeWorkspaceID: nil)
+        )
+    }
 }

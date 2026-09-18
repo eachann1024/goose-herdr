@@ -41,6 +41,25 @@ public enum WorkspaceReorder: Sendable {
         return Plan(workspaceIDs: [moving], beforeWorkspaceID: before)
     }
 
+    /// The `workspace.move_block` call a local reorder still needs, or `nil` when
+    /// herdr cannot see it. `isLive` marks the rows herdr still knows: a closed
+    /// space kept as a sidebar placeholder holds a dead `workspace_id`, so moving
+    /// it — or moving a live row across one — changes no live order and has to
+    /// stay local. Herdr rejects the dead id with `workspace_not_found`.
+    public static func liveMove(
+        moving: String,
+        previousOrder: [String],
+        newOrder: [String],
+        isLive: (String) -> Bool
+    ) -> Plan? {
+        guard isLive(moving) else { return nil }
+        let before = previousOrder.filter(isLive)
+        let after = newOrder.filter(isLive)
+        guard before != after else { return nil }
+        let next = after.drop { $0 != moving }.dropFirst().first
+        return Plan(workspaceIDs: [moving], beforeWorkspaceID: next)
+    }
+
     /// Applies a block move to a workspace array the same way herdr does:
     /// pull `workspaceIDs` out, then splice them in before `beforeWorkspaceID`
     /// (or at the end when that is nil).
