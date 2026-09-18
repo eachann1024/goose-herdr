@@ -9,7 +9,8 @@ source = (Path(__file__).resolve().parents[1] / "Sources/GooseAgent/AppModel.swi
 def between(start, end):
     return source[source.index(start):source.index(end, source.index(start))]
 
-pane = between("struct PaneRef:", "\nstruct SpaceRef:")
+pane = between("struct PaneRef:", "\n/// A space herdr dropped")
+space_selection = between("    @Published var selectedSpace:", "\n    @Published var selectedPane").replace("@Published ", "")
 selection = between("    @Published var selectedPane:", "\n    /// Live attaches").replace("@Published ", "")
 register = between("    private func noteSelectedAttachSession()", "\n    /// Finished agents")
 initializer = between("    init() {", "\n    // MARK: - Derived state")
@@ -20,12 +21,12 @@ harness = r'''
 import Foundation
 let defaults = UserDefaults(suiteName: "session-restore-check-" + UUID().uuidString)!
 ''' + pane + r'''
+enum SidebarSectionID { static let spacesHiddenKey = "sidebar.spacesHidden" }
 struct Device { let id: UUID }
 struct DeviceStore {
     static var devices: [Device] = []
     func load() -> [Device] { Self.devices }
 }
-struct SpaceRef { let deviceID: UUID; let workspaceID: String }
 struct Workspace { let workspaceID: String }
 struct Snapshot { let focusedPaneID: String? }
 struct AgentUnreadKey: Hashable { let deviceID: UUID; let paneID: String }
@@ -38,9 +39,12 @@ class Model {
     var devices: [Device]
     var deviceFilter: UUID?
     static let deviceFilterKey = "device.filter"
-    var selectedSpace: SpaceRef?
     var unreadAgents: Set<AgentUnreadKey> = []
     var attachSessions: [Entry] = []
+    var startingPanes: Set<PaneRef> = []
+    struct PiLaunch { var pane: PaneRef?; var presented = true }
+    var piLaunch: PiLaunch?
+    var showsPiLaunch: Bool { piLaunch?.presented == true }
     var available: Set<PaneRef> = []
     var firstVisiblePaneRef: PaneRef?
     var visibleAgents: [Entry] { available.map { Entry(ref: $0) } }
@@ -52,16 +56,16 @@ class Model {
     func device(_ id: UUID) -> Device? { devices.first { $0.id == id } }
     func isRetainedSpace(_ ref: SpaceRef) -> Bool { false }
     func preferredVisibleAgent() -> Entry? { nil }
-''' + selection + '\n' + register + '\n' + initializer + r'''
+''' + space_selection + '\n' + selection + '\n' + register + '\n' + initializer + r'''
     func afterDiscovery() {
 ''' + validation + r'''
-    func refresh(_ deviceID: UUID, panes: [String], focused: String?) -> Bool {
+    func refresh(_ deviceID: UUID, panes: [String], focused: String?, workspaces: [String] = []) -> Bool {
         let previousPaneOrder = visibleSessions.map(\.ref)
         let paneIDs = Set(panes)
         available = available.filter { $0.deviceID != deviceID }
         available.formUnion(panes.map { PaneRef(deviceID: deviceID, paneID: $0) })
         let snapshot = Snapshot(focusedPaneID: focused)
-        let mergedWorkspaces: [Workspace] = []
+        let mergedWorkspaces: [Workspace] = workspaces.map { Workspace(workspaceID: $0) }
 ''' + refresh + r'''
     }
 }
@@ -110,7 +114,48 @@ class Model {
         defaults.set(Data("invalid".utf8), forKey: "session.selectedPane")
         assert(Model().selectedPane == nil, "invalid stored data falls back safely")
         defaults.removeObject(forKey: "session.selectedPane")
-        print("PASS: selection persists; parallel snapshots, attach registration and missing-target fallback")
+
+        DeviceStore.devices = [Device(id: local), Device(id: remote)]
+        let space = SpaceRef(deviceID: remote, workspaceID: "w1")
+        first.selectedSpace = space
+        first.selectedPane = target
+        let spaceReopened = Model()
+        spaceReopened.afterDiscovery()
+        assert(spaceReopened.selectedSpace == space, "relaunch remembers the last space")
+        assert(spaceReopened.selectedPane == target, "relaunch keeps the last session in that space")
+        assert(spaceReopened.refresh(remote, panes: ["w1:p2"], focused: "w1:p3", workspaces: ["w1"]))
+        assert(spaceReopened.selectedSpace == space && spaceReopened.selectedPane == target,
+               "a live snapshot must not replace the restored space or session")
+        assert(spaceReopened.refresh(remote, panes: ["w1:p2"], focused: nil, workspaces: []))
+        assert(spaceReopened.selectedSpace == nil, "a vanished space clears the restored filter")
+
+        first.selectedSpace = space
+        first.selectedSpace = nil
+        assert(Model().selectedSpace == nil, "All Spaces stays unfiltered after relaunch")
+
+        first.selectedSpace = space
+        defaults.set(true, forKey: SidebarSectionID.spacesHiddenKey)
+        assert(Model().selectedSpace == nil, "hidden Spaces do not restore a filter")
+        defaults.set(false, forKey: SidebarSectionID.spacesHiddenKey)
+
+        first.selectedSpace = space
+        defaults.set(local.uuidString, forKey: "device.filter")
+        let filtered = Model()
+        assert(filtered.deviceFilter == local)
+        assert(filtered.selectedSpace == nil, "a device filter drops a space on another device")
+        defaults.removeObject(forKey: "device.filter")
+
+        first.selectedSpace = space
+        DeviceStore.devices = [Device(id: local)]
+        let goneSpace = Model()
+        goneSpace.afterDiscovery()
+        assert(goneSpace.selectedSpace == nil, "a missing device drops the restored space")
+
+        defaults.set(Data("invalid".utf8), forKey: "session.selectedSpace")
+        assert(Model().selectedSpace == nil, "invalid stored space falls back safely")
+        defaults.removeObject(forKey: "session.selectedSpace")
+        defaults.removeObject(forKey: SidebarSectionID.spacesHiddenKey)
+        print("PASS: space+session persist; parallel snapshots, attach registration and missing-target fallback")
     }
 }
 '''
