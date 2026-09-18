@@ -754,6 +754,7 @@ struct SidebarView: View {
 
             Spacer()
 
+            UsagePanelButton(model: model, usage: model.usage)
             OpenSettingsGearButton()
         }
         .padding(.horizontal, 10)
