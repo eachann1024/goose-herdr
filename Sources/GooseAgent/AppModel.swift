@@ -1572,6 +1572,7 @@ final class AppModel: ObservableObject {
     /// catalog; `agent.start` validates in the target pane instead. Manifests
     /// also feed the attachment-capability registry (paste path vs upload).
     private func loadAgentCatalog(deviceID: UUID, using service: HerdrService) async {
+        defer { if deviceID == Device.local.id { usage.configure() } }
         // Keep the last loaded catalog visible while refreshing so Settings/New Agent
         // don't collapse to a single row (or empty) during the round-trip.
         if case .loaded = sessions[deviceID]?.agentCatalog {
