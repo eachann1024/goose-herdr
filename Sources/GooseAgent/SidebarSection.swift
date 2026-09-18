@@ -33,6 +33,16 @@ enum SidebarActionID: String, CaseIterable, Identifiable {
         case .search: return "magnifyingglass"
         }
     }
+
+    /// Remappable binding shown in the row's tooltip; Files has none.
+    var shortcut: AppShortcutID? {
+        switch self {
+        case .newTerminal: return .quickNewTerminal
+        case .newSpace: return .newSpace
+        case .files: return nil
+        case .search: return .search
+        }
+    }
 }
 
 /// Display names for agent kinds in Settings, menus, and the New panel.

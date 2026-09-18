@@ -6,6 +6,9 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
     case newItem
     case quickNewTerminal
     case newSpace
+    case search
+    case settings
+    case toggleSidebar
     case close
     case splitVertical
     case splitHorizontal
@@ -30,6 +33,9 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .newItem: return "New"
         case .quickNewTerminal: return "New Terminal"
         case .newSpace: return "New Space"
+        case .search: return "Search"
+        case .settings: return "Settings"
+        case .toggleSidebar: return "Toggle Sidebar"
         case .close: return "Close"
         case .splitVertical: return "Split Vertically"
         case .splitHorizontal: return "Split Horizontally"
@@ -52,8 +58,11 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
     var detail: LocalizedStringKey {
         switch self {
         case .newItem: return "Opens the New panel to choose a space and agent"
-        case .quickNewTerminal: return "Opens a terminal in the current space"
+        case .quickNewTerminal: return "Opens a terminal in the current space; in Priority sessions or All Spaces, pick the space first"
         case .newSpace: return "Opens the New Space sheet"
+        case .search: return "Opens the search sheet"
+        case .settings: return "Opens the Settings window"
+        case .toggleSidebar: return "Collapse or show the sidebar"
         case .close: return "Close split, terminal, agent, space, or window"
         case .splitVertical: return "Open a local terminal to the right of the focused pane"
         case .splitHorizontal: return "Open a local terminal below the focused pane"
@@ -78,6 +87,9 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .newItem: return String(localized: "New")
         case .quickNewTerminal: return String(localized: "New Terminal")
         case .newSpace: return String(localized: "New Space")
+        case .search: return String(localized: "Search")
+        case .settings: return String(localized: "Settings")
+        case .toggleSidebar: return String(localized: "Toggle Sidebar")
         case .close: return String(localized: "Close")
         case .splitVertical: return String(localized: "Split Vertically")
         case .splitHorizontal: return String(localized: "Split Horizontally")
@@ -102,6 +114,9 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
         case .newItem: return KeyChord(key: "n", modifiers: [.command, .shift])
         case .quickNewTerminal: return KeyChord(key: "t", modifiers: .command)
         case .newSpace: return KeyChord(key: "n", modifiers: .command)
+        case .search: return KeyChord(key: "k", modifiers: .command)
+        case .settings: return KeyChord(key: ",", modifiers: .command)
+        case .toggleSidebar: return KeyChord(key: "b", modifiers: .command)
         case .close: return KeyChord(key: "w", modifiers: .command)
         case .splitVertical: return KeyChord(key: "d", modifiers: .command)
         case .splitHorizontal: return KeyChord(key: "d", modifiers: [.command, .shift])
