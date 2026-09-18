@@ -35,6 +35,26 @@ enum SidebarActionID: String, CaseIterable, Identifiable {
     }
 }
 
+/// Display names for agent kinds in Settings, menus, and the New panel.
+enum AgentKindDisplay {
+    static func name(for kind: String) -> String {
+        switch kind {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        case "cursor": return "Cursor"
+        case "gemini": return "Gemini"
+        case "grok": return "Grok"
+        case "hermes": return "Hermes"
+        case "kimi": return "Kimi"
+        case "opencode": return "OpenCode"
+        case "pi": return "Pi"
+        case "omp": return "Oh My Pi"
+        case "copilot": return "Copilot"
+        default: return kind.capitalized
+        }
+    }
+}
+
 /// Display order for agent kinds in Settings and the Agent menu.
 enum AgentKindOrder {
     static let defaultsKey = "agents.kindOrder"

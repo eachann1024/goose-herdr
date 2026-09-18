@@ -217,6 +217,7 @@ final class AppModel: ObservableObject {
 
     @Published var showAddDevice = false
     @Published var showNewSpace = false
+    @Published var showNewItem = false
     @Published var showSearch = false
     @Published var isFileManagerActive = false
     private var closingSplitWorkspaces: Set<SpaceRef> = []
@@ -985,6 +986,25 @@ final class AppModel: ObservableObject {
 
     func toggleNewSpace() {
         showNewSpace.toggle()
+    }
+
+    func toggleNewItem() {
+        showNewItem.toggle()
+    }
+
+    /// Create an agent in the chosen space. Selects that space so the new
+    /// session is revealed there instead of staying on All Spaces.
+    func createNewItem(space: SpaceEntry, kind: String) {
+        isFileManagerActive = false
+        selectedSpace = space.ref
+        selectedShellID = nil
+        let bypass = UserDefaults.standard.object(forKey: "agent.bypassDefault") as? Bool ?? true
+        startNewAgent(
+            device: space.device,
+            kind: kind,
+            workspaceID: space.workspace.workspaceID,
+            bypass: bypass && (HerdrService.bypassFlags(for: kind) != nil)
+        )
     }
 
     func selectAgent(_ ref: PaneRef) {

@@ -63,6 +63,9 @@ struct RootView: View {
             model.synchronizeSpaceVisibility()
         }
         .sheet(isPresented: $model.showAddDevice) { AddDeviceSheet(model: model) }
+        .sheet(isPresented: $model.showNewItem, onDismiss: { model.showNewItem = false }) {
+            NewItemSheet(model: model)
+        }
         .task(id: model.showNewSpace) { await prepareNewSpace() }
         .sheet(item: $newSpaceListing, onDismiss: { model.showNewSpace = false }) { listing in
             NewSpaceSheet(model: model, listing: listing)
@@ -946,12 +949,26 @@ struct SheetSectionLabel: View {
 }
 
 /// Compact selectable card used for sheet choices instead of native Picker menus.
-struct SheetChoiceCard: View {
+struct SheetChoiceCard<Icon: View>: View {
     let title: String
     let subtitle: String?
-    let systemImage: String
     let selected: Bool
     let action: () -> Void
+    let icon: Icon
+
+    init(
+        title: String,
+        subtitle: String? = nil,
+        selected: Bool,
+        action: @escaping () -> Void,
+        @ViewBuilder icon: () -> Icon
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.selected = selected
+        self.action = action
+        self.icon = icon()
+    }
 
     init(
         title: String,
@@ -959,18 +976,16 @@ struct SheetChoiceCard: View {
         systemImage: String,
         selected: Bool,
         action: @escaping () -> Void
-    ) {
-        self.title = title
-        self.subtitle = subtitle
-        self.systemImage = systemImage
-        self.selected = selected
-        self.action = action
+    ) where Icon == Image {
+        self.init(title: title, subtitle: subtitle, selected: selected, action: action) {
+            Image(systemName: systemImage)
+        }
     }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 7) {
-                Image(systemName: systemImage)
+                icon
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(selected ? Theme.accent : Theme.textSecondary)
                     .frame(width: SheetCardMetrics.iconSize, height: SheetCardMetrics.iconSize)
@@ -1001,6 +1016,183 @@ struct SheetChoiceCard: View {
         }
         .buttonStyle(.plain)
         .herdrmHideFocusRing()
+    }
+}
+
+struct NewItemSheet: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var spaceID: String?
+    @State private var kind: String?
+
+    private var spaces: [AppModel.SpaceEntry] { model.visibleSpaces }
+
+    private var selectedSpace: AppModel.SpaceEntry? {
+        spaces.first { $0.id == spaceID } ?? spaces.first
+    }
+
+    private var catalogDeviceID: UUID {
+        selectedSpace?.device.id ?? Device.local.id
+    }
+
+    private var catalog: AgentCatalogState {
+        model.session(catalogDeviceID).agentCatalog
+    }
+
+    private var kinds: [String] {
+        AgentKindOrder.visibleSorted(catalog.kinds)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SheetHeader(
+                systemImage: "plus",
+                title: String(localized: "New"),
+                subtitle: String(localized: "Choose a space and an agent")
+            )
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    spaceSection
+                    Spacer().frame(height: 12)
+                    agentSection
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 480)
+
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .focusEffectDisabled()
+                Button("New") {
+                    guard let space = selectedSpace, let kind else { return }
+                    model.createNewItem(space: space, kind: kind)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                .keyboardShortcut(.defaultAction)
+                .focusEffectDisabled()
+                .disabled(selectedSpace == nil || kind == nil)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .sheetFixedWidth(SheetLayout.medium)
+        .herdrmHideFocusRing()
+        .onAppear { syncDefaults() }
+        .onChange(of: spaceID) { _, _ in
+            model.reloadAgentCatalog(deviceID: catalogDeviceID)
+            syncKindIfNeeded()
+        }
+        .onChange(of: catalogSignature) { _, _ in
+            syncKindIfNeeded()
+        }
+    }
+
+    private var catalogSignature: String {
+        "\(catalogDeviceID.uuidString)|\(kinds.joined(separator: ","))"
+    }
+
+    @ViewBuilder
+    private var spaceSection: some View {
+        SheetSectionLabel("SPACE")
+        if spaces.isEmpty {
+            emptyHint(String(localized: "Create a space first to start an agent."))
+            Button("New Space") {
+                dismiss()
+                model.showNewSpace = true
+            }
+            .focusEffectDisabled()
+        } else {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                spacing: SheetCardMetrics.gridSpacing
+            ) {
+                ForEach(spaces) { entry in
+                    SheetChoiceCard(
+                        title: spaceTitle(entry),
+                        selected: selectedSpace?.id == entry.id
+                    ) {
+                        spaceID = entry.id
+                    } icon: {
+                        ProjectSpaceIcon(
+                            path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID),
+                            size: 16,
+                            slot: SheetCardMetrics.iconSize
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var agentSection: some View {
+        SheetSectionLabel("AGENT")
+        switch catalog {
+        case .loading:
+            emptyHint(String(localized: "Checking installed agent CLIs…"))
+        case .failed(let reason):
+            emptyHint(String(format: String(localized: "Couldn’t detect agents: %@"), reason))
+        case .loaded(let loaded, _) where loaded.isEmpty:
+            emptyHint(String(localized: "No agents detected"))
+        case .loaded:
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                spacing: SheetCardMetrics.gridSpacing
+            ) {
+                ForEach(kinds, id: \.self) { item in
+                    SheetChoiceCard(
+                        title: AgentKindDisplay.name(for: item),
+                        selected: kind == item
+                    ) {
+                        kind = item
+                    } icon: {
+                        if let resource = BrandIconLoader.agentIcon(for: item) {
+                            BrandIcon(resource: resource, size: 16)
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func emptyHint(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12))
+            .foregroundStyle(Theme.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func spaceTitle(_ entry: AppModel.SpaceEntry) -> String {
+        if model.showsDeviceBadges {
+            return "\(entry.workspace.label) · \(entry.device.name)"
+        }
+        return entry.workspace.label
+    }
+
+    private func syncDefaults() {
+        if spaceID == nil {
+            spaceID = model.selectedSpace.flatMap { ref in
+                spaces.first { $0.ref == ref }?.id
+            } ?? spaces.first?.id
+        }
+        model.reloadAgentCatalog(deviceID: catalogDeviceID)
+        syncKindIfNeeded()
+    }
+
+    private func syncKindIfNeeded() {
+        if let kind, kinds.contains(kind) { return }
+        kind = kinds.first
     }
 }
 

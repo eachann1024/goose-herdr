@@ -110,6 +110,10 @@ struct GooseAgentApp: App {
             // whole device tree, so New Window gives up ⌘N to New Space.
             CommandGroup(replacing: .newItem) {
                 let _ = shortcutsRevision
+                Button("New") { focusedModel?.showNewItem = true }
+                    .keyboardShortcut(AppShortcuts.chord(for: .newItem).keyEquivalent,
+                                      modifiers: AppShortcuts.chord(for: .newItem).modifiers)
+                    .disabled(focusedModel == nil)
                 Button("New Terminal") { focusedModel?.quickNewTerminal() }
                     .keyboardShortcut(AppShortcuts.chord(for: .quickNewTerminal).keyEquivalent,
                                       modifiers: AppShortcuts.chord(for: .quickNewTerminal).modifiers)
@@ -368,35 +372,18 @@ private struct AgentKindCommandItems: View {
         } else {
             ForEach(kinds, id: \.self) { kind in
                 if let chord = AgentKindShortcuts.chord(for: kind) {
-                    Button(displayLabel(kind)) {
+                    Button(AgentKindDisplay.name(for: kind)) {
                         focusedModel?.quickNewAgent(kind: kind)
                     }
                     .keyboardShortcut(chord.keyEquivalent, modifiers: chord.modifiers)
                     .disabled(focusedModel == nil)
                 } else {
-                    Button(displayLabel(kind)) {
+                    Button(AgentKindDisplay.name(for: kind)) {
                         focusedModel?.quickNewAgent(kind: kind)
                     }
                     .disabled(focusedModel == nil)
                 }
             }
-        }
-    }
-
-    private func displayLabel(_ kind: String) -> String {
-        switch kind {
-        case "claude": return "Claude"
-        case "codex": return "Codex"
-        case "cursor": return "Cursor"
-        case "gemini": return "Gemini"
-        case "grok": return "Grok"
-        case "hermes": return "Hermes"
-        case "kimi": return "Kimi"
-        case "opencode": return "OpenCode"
-        case "pi": return "Pi"
-        case "omp": return "Oh My Pi"
-        case "copilot": return "Copilot"
-        default: return kind.capitalized
         }
     }
 }
@@ -805,7 +792,7 @@ struct ShortcutsSettingsView: View {
         let path = localPaths[kind]
         return SettingsRow(divided: kind != localKinds.first) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(displayLabel(kind))
+                Text(AgentKindDisplay.name(for: kind))
                     .font(SettingsLayout.bodyFont)
                 Text(shortPath(path) ?? kind)
                     .font(.system(size: 10.5).monospaced())
@@ -904,22 +891,6 @@ struct ShortcutsSettingsView: View {
         return path
     }
 
-    private func displayLabel(_ kind: String) -> String {
-        switch kind {
-        case "claude": return "Claude"
-        case "codex": return "Codex"
-        case "cursor": return "Cursor"
-        case "gemini": return "Gemini"
-        case "grok": return "Grok"
-        case "hermes": return "Hermes"
-        case "kimi": return "Kimi"
-        case "opencode": return "OpenCode"
-        case "pi": return "Pi"
-        case "omp": return "Oh My Pi"
-        case "copilot": return "Copilot"
-        default: return kind.capitalized
-        }
-    }
 }
 
 struct AgentsSettingsView: View {
@@ -951,7 +922,7 @@ struct AgentsSettingsView: View {
     ]
 
     private static func displayLabel(for kind: String) -> String {
-        knownKinds.first(where: { $0.kind == kind })?.label ?? kind
+        knownKinds.first(where: { $0.kind == kind })?.label ?? AgentKindDisplay.name(for: kind)
     }
 
     private static func hint(for kind: String) -> String {

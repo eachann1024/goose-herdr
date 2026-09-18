@@ -417,6 +417,23 @@
         }
       }
     },
+    "New": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增"
+          }
+        }
+      }
+    },
     "New Terminal": {
       "extractionState": "manual",
       "localizations": {
@@ -3416,6 +3433,91 @@
           "stringUnit": {
             "state": "translated",
             "value": "快捷键"
+          }
+        }
+      }
+    },
+    "Opens the New panel to choose a space and agent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opens the New panel to choose a space and agent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开新增面板，可选择空间和 Agent"
+          }
+        }
+      }
+    },
+    "Choose a space and an agent": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a space and an agent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择空间和 Agent"
+          }
+        }
+      }
+    },
+    "Create a space first to start an agent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create a space first to start an agent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先创建空间，再启动 Agent。"
+          }
+        }
+      }
+    },
+    "SPACE": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SPACE"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空间"
+          }
+        }
+      }
+    },
+    "AGENT": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AGENT"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent"
           }
         }
       }

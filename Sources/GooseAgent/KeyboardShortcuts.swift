@@ -3,6 +3,7 @@ import SwiftUI
 
 /// Remappable app shortcuts. Stored as JSON in UserDefaults; menus and help text read live.
 enum AppShortcutID: String, CaseIterable, Identifiable {
+    case newItem
     case quickNewTerminal
     case newSpace
     case close
@@ -26,6 +27,7 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var title: LocalizedStringKey {
         switch self {
+        case .newItem: return "New"
         case .quickNewTerminal: return "New Terminal"
         case .newSpace: return "New Space"
         case .close: return "Close"
@@ -49,6 +51,7 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var detail: LocalizedStringKey {
         switch self {
+        case .newItem: return "Opens the New panel to choose a space and agent"
         case .quickNewTerminal: return "Opens a terminal in the current space"
         case .newSpace: return "Opens the New Space sheet"
         case .close: return "Close split, terminal, agent, space, or window"
@@ -72,6 +75,7 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var conflictLabel: String {
         switch self {
+        case .newItem: return String(localized: "New")
         case .quickNewTerminal: return String(localized: "New Terminal")
         case .newSpace: return String(localized: "New Space")
         case .close: return String(localized: "Close")
@@ -95,6 +99,7 @@ enum AppShortcutID: String, CaseIterable, Identifiable {
 
     var defaultChord: KeyChord {
         switch self {
+        case .newItem: return KeyChord(key: "n", modifiers: [.command, .shift])
         case .quickNewTerminal: return KeyChord(key: "t", modifiers: .command)
         case .newSpace: return KeyChord(key: "n", modifiers: .command)
         case .close: return KeyChord(key: "w", modifiers: .command)

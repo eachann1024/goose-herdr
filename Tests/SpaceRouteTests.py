@@ -298,12 +298,14 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         assert(model.selectedSpace == SpaceRef(deviceID: local.id, workspaceID: "revived"),
                "a revived workspace remaps the existing space filter")
 
-        // Shortcuts: New Terminal / New Space / Close / Pi keep the required
+        // Shortcuts: New / New Terminal / New Space / Close / Pi keep the required
         // defaults, stay remappable, and the retired general New Agent id is gone
         // rather than shadowing a live binding.
         let suite = "goose-herdr-space-route-check"
         let store = UserDefaults(suiteName: suite)!
         store.removePersistentDomain(forName: suite)
+        assert(AppShortcuts.chord(for: .newItem, store: store) == KeyChord(key: "n", modifiers: [.command, .shift]),
+               "New default is shift-cmd-N")
         assert(AppShortcuts.chord(for: .quickNewTerminal, store: store) == KeyChord(key: "t", modifiers: .command),
                "New Terminal default is cmd-T")
         assert(AppShortcuts.chord(for: .newSpace, store: store) == KeyChord(key: "n", modifiers: .command),
@@ -314,11 +316,12 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
                "Pi default is option-P")
         assert(AgentKindShortcuts.chord(for: "codex", store: store) == nil,
                "other agents stay unbound")
+        assert(AppShortcutID.allCases.first == .newItem, "New is listed above New Terminal")
         assert(AppShortcutID.allCases.map { $0.rawValue }.sorted() == [
             "close", "equalizeSplits", "focusDown", "focusLeft", "focusRight", "focusUp",
-            "growPane", "narrowPane", "newSpace", "quickNewTerminal", "shrinkPane",
+            "growPane", "narrowPane", "newItem", "newSpace", "quickNewTerminal", "shrinkPane",
             "splitHorizontal", "splitVertical", "swapDown", "swapLeft", "swapRight", "swapUp", "widenPane"
-        ], "the general shortcut set includes every split command and no retired New Agent command")
+        ], "the general shortcut set includes New plus every split command and no retired New Agent command")
 
         assert(Set(AppShortcutID.allCases.map { $0.defaultChord }).count == AppShortcutID.allCases.count)
         for (id, focus) in [(AppShortcutID.swapLeft, AppShortcutID.focusLeft), (.swapRight, .focusRight), (.swapUp, .focusUp), (.swapDown, .focusDown)] {
@@ -358,9 +361,16 @@ for stale in [
 ]:
     assert stale not in all_sources, f"removed sidebar/agent-picker wiring came back: {stale}"
 assert "func quickNewAgent(kind: String)" in source, "per-kind agent launch must stay"
+assert "func createNewItem(space:" in source, "New panel creates in the chosen space"
+assert "showNewItem" in source, "New panel is a distinct sheet flag"
+assert "case newItem" in shortcuts, "New is a general shortcut above New Terminal"
+assert commands.index('Button("New") { focusedModel?.showNewItem = true }') < commands.index(
+    'Button("New Terminal") { focusedModel?.quickNewTerminal() }'
+), "File menu lists New above New Terminal"
 assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
 assert "0.5" in source[source.index("func requestCreatedSessionFocus("):source.index("func focusSplit(")], "slow attach needs a late focus retry"
 root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()
+assert "struct NewItemSheet" in root_view, "New panel lives next to New Space"
 become_key = root_view.split("NSWindow.didBecomeKeyNotification", 1)[1]
 assert "pendingCreatedSessionFocus = false" not in become_key.split("private func paneHandleInset", 1)[0], "key-window noise must not flush created-session focus"
 assert "func activateSpace(" in source, "empty spaces open a terminal on click"
