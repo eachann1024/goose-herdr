@@ -726,11 +726,13 @@ final class AppModel: ObservableObject {
 
     /// Agents across the scope, filtered by selected space, in herdr tab order
     /// (device → workspace → snapshot array) so sidebar drag matches the TUI.
-    var visibleAgents: [AgentEntry] {
+    var visibleAgents: [AgentEntry] { agents(in: selectedSpace) }
+
+    private func agents(in space: SpaceRef?) -> [AgentEntry] {
         var entries = devicesInScope.flatMap { device in
             session(device.id).agents.map { agentEntry(device: device, agent: $0) }
         }
-        if let space = selectedSpace {
+        if let space {
             entries = entries.filter {
                 $0.device.id == space.deviceID && $0.agent.workspaceID == space.workspaceID
             }
@@ -762,9 +764,11 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var visibleTerminals: [TerminalEntry] {
+    var visibleTerminals: [TerminalEntry] { terminals(in: selectedSpace) }
+
+    private func terminals(in space: SpaceRef?) -> [TerminalEntry] {
         var entries = devicesInScope.flatMap { terminalEntries(for: $0) }
-        if let space = selectedSpace {
+        if let space {
             entries = entries.filter {
                 $0.device.id == space.deviceID && $0.pane.workspaceID == space.workspaceID
             }
@@ -784,9 +788,11 @@ final class AppModel: ObservableObject {
 
     /// Agents and terminals in one herdr tab order. Sidebar has no type groups,
     /// so a new tab (appended by `tab.create`) lands at the bottom of the list.
-    var visibleSessions: [AttachedEntry] {
-        let entries = visibleAgents.map(AttachedEntry.agent)
-            + visibleTerminals.map(AttachedEntry.terminal)
+    var visibleSessions: [AttachedEntry] { sessions(in: selectedSpace) }
+
+    private func sessions(in space: SpaceRef?) -> [AttachedEntry] {
+        let entries = agents(in: space).map(AttachedEntry.agent)
+            + terminals(in: space).map(AttachedEntry.terminal)
         let deviceRank = Dictionary(uniqueKeysWithValues: devicesInScope.enumerated().map { ($1.id, $0) })
         return entries.sorted { lhs, rhs in
             let d0 = deviceRank[lhs.device.id] ?? Int.max
