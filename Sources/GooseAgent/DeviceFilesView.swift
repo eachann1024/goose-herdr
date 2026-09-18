@@ -284,7 +284,7 @@ struct DeviceFilesView: View {
             }
             .buttonStyle(.bordered)
             .focusEffectDisabled()
-            .help("Copy the selected local file to \(targetDevice.name)")
+            .codexTooltip("Copy the selected local file to \(targetDevice.name)")
             .disabled(!canUpload)
 
             Button {
@@ -295,7 +295,7 @@ struct DeviceFilesView: View {
             }
             .buttonStyle(.bordered)
             .focusEffectDisabled()
-            .help("Copy the selected file from \(targetDevice.name) to Local")
+            .codexTooltip("Copy the selected file from \(targetDevice.name) to Local")
             .disabled(!canDownload)
             Spacer()
         }
@@ -435,7 +435,7 @@ private struct DeviceFilePane: View {
             .buttonStyle(.plain)
             .focusEffectDisabled()
             .foregroundStyle(Theme.textTertiary)
-            .help(browser.includesHidden ? "Hide hidden files" : "Show hidden files")
+            .codexTooltip(browser.includesHidden ? "Hide hidden files" : "Show hidden files")
             Button {
                 Task { await browser.refresh() }
             } label: {
@@ -444,7 +444,7 @@ private struct DeviceFilePane: View {
             .buttonStyle(.plain)
             .focusEffectDisabled()
             .foregroundStyle(Theme.textTertiary)
-            .help("Refresh")
+            .codexTooltip("Refresh")
         }
         .padding(.horizontal, 12)
         .frame(height: 36)
@@ -460,7 +460,7 @@ private struct DeviceFilePane: View {
             .buttonStyle(.plain)
             .focusEffectDisabled()
             .disabled(browser.currentPath == "/")
-            .help("Parent folder")
+            .codexTooltip("Parent folder")
 
             Button {
                 Task { await browser.goHome() }
@@ -469,7 +469,7 @@ private struct DeviceFilePane: View {
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()
-            .help("Home folder")
+            .codexTooltip("Home folder")
 
             TextField("Path", text: $browser.pathText)
                 .textFieldStyle(.roundedBorder)
@@ -486,7 +486,7 @@ private struct DeviceFilePane: View {
                 }
                 .buttonStyle(.plain)
                 .focusEffectDisabled()
-                .help("Choose folder")
+                .codexTooltip("Choose folder")
             }
         }
         .padding(.horizontal, 10)
@@ -573,7 +573,7 @@ private struct DeviceFilePane: View {
                     .foregroundStyle(Theme.warning)
                 Text(error)
                     .lineLimit(1)
-                    .help(error)
+                    .codexTooltip(verbatim: error)
             } else {
                 Text("\(browser.entries.count) items")
             }

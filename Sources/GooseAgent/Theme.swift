@@ -42,6 +42,13 @@ enum Theme {
     static let sidebarBorder = dynamic(hex(0xD9D9D9), hex(0x292929))
     static let hairline = dynamic(hex(0x000000, alpha: 0.08), hex(0xFFFFFF, alpha: 0.06))
 
+    // Hover tooltip (Codex-style bubble + keycap pill).
+    static let tooltipBackground = dynamic(hex(0xFFFFFF), hex(0x2A2A2C))
+    static let tooltipText = dynamic(hex(0x242424), hex(0xE8E8E8))
+    static let tooltipKeycap = dynamic(hex(0xE7E7E7), hex(0x424244))
+    static let tooltipBorder = dynamic(hex(0xE5E5E5), hex(0x505052))
+    static let tooltipShadow = dynamic(hex(0x000000, alpha: 0.14), hex(0x000000, alpha: 0.5))
+
     // Settings surfaces match the reference without changing the console theme.
     static let settingsBackground = dynamic(hex(0xFFFFFF), hex(0x1E1E1E))
     static let settingsSidebar = dynamic(hex(0xEDEDED), hex(0x282828))
