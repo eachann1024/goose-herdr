@@ -492,10 +492,15 @@ struct SidebarView: View {
                     }
                 )
             }
-            .help(path ?? entry.title)
+            .anchorPreference(key: PiLaunchOriginKey.self, value: .bounds) {
+                model.piLaunch?.pane == entry.ref ? $0 : nil
+            }
+            .codexTooltip(verbatim: showsSpace ? entry.title : (path ?? entry.title))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { model.selectAgent(entry.ref) }
-            .accessibilityLabel(entry.title)
+            .accessibilityLabel(Text(verbatim: showsSpace
+                ? "\(entry.title), \(model.spaceName(deviceID: entry.device.id, workspaceID: entry.pane.workspaceID)), \(entry.device.name)"
+                : entry.title))
         }
     }
 
@@ -668,10 +673,27 @@ struct SidebarView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { model.selectAgent(entry.ref) }
         .accessibilityLabel(accessibilityLabel(unread: unread))
+        .anchorPreference(key: PiLaunchOriginKey.self, value: .bounds) {
+            model.piLaunch?.pane == entry.ref ? $0 : nil
+        }
+    }
+
+    private var priorityStatusTitle: String? {
+        guard showsSpace else { return nil }
+        if entry.agent.status == .blocked { return String(localized: "Input needed") }
+        if entry.agent.status == .done, model.isUnread(entry) { return String(localized: "Done") }
+        if model.isPriorityGroup(.agent(entry)) { return String(localized: "Viewing") }
+        return nil
     }
 
     private func accessibilityLabel(unread: Bool) -> String {
         var parts = [entry.title]
+        if showsSpace {
+            parts.append(model.spaceName(deviceID: entry.device.id, workspaceID: entry.agent.workspaceID))
+            parts.append(entry.device.name)
+            if let title = priorityStatusTitle { parts.append(title) }
+        }
+        if showsSpace, priorityStatusTitle != nil { return parts.joined(separator: ", ") }
         switch entry.agent.status {
         case .working: parts.append(String(localized: "Working"))
         case .blocked: parts.append(String(localized: "Needs input"))
