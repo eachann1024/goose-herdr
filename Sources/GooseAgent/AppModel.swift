@@ -212,10 +212,14 @@ final class AppModel: ObservableObject {
             } else {
                 UserDefaults.standard.removeObject(forKey: Self.selectedPaneKey)
             }
+            if let launch = piLaunch, selectedPane != launch.pane {
+                piLaunch?.presented = false
+            }
             noteSelectedAttachSession()
         }
     }
     private static let selectedPaneKey = "session.selectedPane"
+    private static let selectedSpaceKey = "session.selectedSpace"
 
     /// Live attaches stay mounted across selection/space changes. Confirmed pane
     /// or device removal releases their views and owned split siblings.
@@ -320,9 +324,9 @@ final class AppModel: ObservableObject {
     }
 
     func restoreTerminalFocus() {
-        guard let tree = currentSplitTree else { return }
+        guard !showsPiLaunch, let tree = currentSplitTree else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.currentSplitTree?.focusedID == tree.focusedID,
+            guard let self, !self.showsPiLaunch, self.currentSplitTree?.focusedID == tree.focusedID,
                   let view = self.terminalView(tree.focusedID),
                   let window = view.window else { return }
             self.pendingCreatedSessionFocus = false
@@ -490,7 +494,14 @@ final class AppModel: ObservableObject {
     /// Standalone terminals. Their views stay alive while deselected —
     /// unlike agents, a local shell has no server side to reattach to.
     @Published var shellSessions: [ShellSession] = []
-    @Published var selectedShellID: UUID?
+    @Published var selectedShellID: UUID? {
+        didSet {
+            if selectedShellID != nil {
+                if oldValue == nil { leavePrioritySelection(selectedPane) }
+                piLaunch?.presented = false
+            }
+        }
+    }
     /// In-window device panel (NSPopover crashes in ViewBridge on macOS 26+ betas).
     @Published var showDevicePanel = false
     @Published var deviceToEdit: Device?
@@ -1141,6 +1152,7 @@ final class AppModel: ObservableObject {
     // MARK: - Selection
 
     func selectSpace(_ ref: SpaceRef?) {
+        piLaunch?.presented = false
         let ref = UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) ? nil : ref
         isFileManagerActive = false
         if let space = selectedSpace, let pane = selectedPane {
