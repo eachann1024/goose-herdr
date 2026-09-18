@@ -30,6 +30,7 @@ for name, detail in details.items():
     for language in ("en", "zh-Hans"):
         for text in (titles[name], detail):
             assert catalog[text]["localizations"][language]["stringUnit"]["value"]
+assert catalog["Advanced"]["localizations"]["zh-Hans"]["stringUnit"]["value"] == "高级操作"
 
 
 def slice_between(start: str, end: str) -> str:
@@ -52,13 +53,17 @@ select_space = slice_between("    func selectSpace(_ ref: SpaceRef?) {", "\n    
 # Exercise the real property observer as well as the immediate visibility sync.
 selected_space = slice_between("    @Published var selectedSpace", "\n    @Published var selectedPane")
 filtering = slice_between("    func setDeviceFilter(", "\n    /// When jumping into a space")
-quick_new_terminal = slice_between("    /// Create a terminal in the current space", "\n    /// Explicit per-kind commands")
-quick_new_agent = slice_between("    /// Explicit per-kind commands start an agent without a picker.", "\n    /// Select the new pane. All Spaces")
+quick_new_terminal = slice_between("    /// ⌘T asks for a space only in All Spaces or Priority sessions", "\n    /// Space the sheet")
+create_new_session = slice_between("    /// Sheet confirm. Re-resolves", "\n    /// `agent.bypassDefault`")
+agent_bypass = slice_between("    /// `agent.bypassDefault`", "\n    /// Explicit per-kind commands")
+quick_new_agent = slice_between("    /// Explicit per-kind commands fix the kind", "\n    /// Select the new pane. All Spaces")
 reveal_created = slice_between("    /// Select the new pane. All Spaces", "\n    func startNewTerminal(")
 start_new_terminal = slice_between("    func startNewTerminal(", "\n    /// New Agent:")
 start_new_agent = slice_between("    func startNewAgent(", "\n    // MARK: - Retained empty spaces")
 for name, chunk in [
     ("quickNewTerminal", quick_new_terminal),
+    ("asksForNewSessionSpace", quick_new_terminal),
+    ("createNewSession", create_new_session),
     ("quickNewAgent", quick_new_agent),
     ("revealCreatedSession", reveal_created),
     ("selectSpace", select_space),
@@ -66,6 +71,8 @@ for name, chunk in [
 ]:
     assert name in chunk, f"slice marker drifted for {name}"
 assert "revealCreatedSession(" in start_new_terminal and "revealCreatedSession(" in start_new_agent
+assert "waitForStartedAgent(" in start_new_agent
+assert "startingPanes.insert" in start_new_agent
 assert "selectedSpace = SpaceRef" not in start_new_terminal
 assert "selectedSpace = SpaceRef" not in start_new_agent
 
@@ -81,6 +88,8 @@ extracted = "\n".join(
         select_space,
         filtering,
         quick_new_terminal,
+        create_new_session,
+        agent_bypass,
         quick_new_agent,
         reveal_created,
     ]
@@ -92,7 +101,7 @@ import SwiftUI
 
 enum SidebarSectionID { static let spacesHiddenKey = "sidebar.spacesHidden" }
 struct PaneRef: Hashable { let deviceID: UUID; let paneID: String }
-struct SpaceRef: Hashable { let deviceID: UUID; let workspaceID: String }
+struct SpaceRef: Hashable, Codable { let deviceID: UUID; let workspaceID: String }
 struct Device: Equatable {
     let id: UUID
     let name: String
@@ -104,10 +113,17 @@ struct AttachedStub { let device: Device; let workspaceID: String }
 struct AgentEntryStub { let ref: PaneRef }
 struct DeviceState { var workspaces: [WorkspaceInfo] = [] }
 enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil } }
+enum NewSessionType: Equatable {
+    case choose, terminal
+    case agent(String)
+}
 
 @MainActor final class Model {
     var devices: [Device] = []
     var deviceFilter: UUID?
+    static let selectedSpaceKey = "session.selectedSpace"
+    var prioritySessionsEnabled = false
+    var newSession: NewSessionType?
     var selectedPane: PaneRef?
     var selectedShellID: UUID?
     var shellSessions: [ShellSession] = []
@@ -120,6 +136,8 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         else { return nil }
         return AttachedStub(device: device, workspaceID: workspaceID)
     }
+    struct PiLaunch { var presented = true }
+    var piLaunch: PiLaunch?
     var isFileManagerActive = false
     var actionError: String?
     var started: [(UUID, String)] = []
@@ -143,9 +161,11 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
     var visibleSessions: [AgentEntryStub] { visibleAgents + visibleTerminals }
     var firstVisiblePaneRef: PaneRef? { visibleSessions.first?.ref }
     func preferredVisibleAgent() -> AgentEntryStub? { nil }
-    func startNewTerminal(device: Device, workspaceID: String) { started.append((device.id, workspaceID)) }
+    func startNewTerminal(device: Device, workspaceID: String, rootPaneID: String? = nil) {
+        started.append((device.id, workspaceID))
+    }
     func newShellSession(on device: Device) { shells.append(device.id) }
-    func startNewAgent(device: Device, kind: String, workspaceID: String?, bypass: Bool) {
+    func startNewAgent(device: Device, kind: String, workspaceID: String?, bypass: Bool, rootPaneID: String? = nil) {
         launched.append((device.id, kind, workspaceID))
     }
     func refresh(_ id: UUID) async {}
@@ -230,54 +250,95 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         model.lastPaneBySpace = [:]
         model.attachSessions = []
 
-        // Routing: current standalone shell first.
+        // Routing: a standalone shell keeps its own New Terminal behaviour, and
+        // that branch stays ahead of the sheet gate.
         model.selectedSpace = nil
         model.selectedPane = nil
         let shell = ShellSession(id: UUID(), title: "Terminal 1", device: local)
         model.shellSessions = [shell]
         model.selectedShellID = shell.id
         model.quickNewTerminal()
-        assert(model.shells == [local.id] && model.started.isEmpty, "standalone shell wins")
+        assert(model.newSession == nil && model.shells == [local.id] && model.started.isEmpty,
+               "an active standalone shell opens another standalone shell")
 
-        // Routing: the selected space, then the filter as a hard boundary.
+        // Routing: All Spaces has no space to create in, so ⌘T asks for one
+        // instead of guessing.
+        model.selectedShellID = nil
+        model.shellSessions = []
+        model.shells = []
+        model.quickNewTerminal()
+        assert(model.newSession == .terminal && model.shells.isEmpty && model.started.isEmpty,
+               "All Spaces asks for the space instead of spawning a shell")
+
+        // Routing: a selected space creates the terminal there; only the
+        // selected standalone shell keeps its own New Terminal behaviour.
+        model.newSession = nil
         model.selectedShellID = nil
         model.shellSessions = []
         model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
         model.shells = []
-        model.quickNewTerminal()
-        assert(model.started.map { $0.0 } == [local.id] && model.started.map { $0.1 } == ["w1"],
-               "selected space opens the terminal")
-
         model.started = []
-        model.setDeviceFilter(remote.id)
         model.quickNewTerminal()
-        assert(model.started.isEmpty, "a filtered-out space is not used")
-        assert(model.shells == [remote.id], "the filter's device gets the standalone terminal")
-
-        model.selectedShellID = shell.id
+        assert(model.newSession == nil && model.started.count == 1
+               && model.started[0].0 == local.id && model.started[0].1 == "w1" && model.shells.isEmpty,
+               "a selected space creates the terminal there")
         model.shellSessions = [shell]
+        model.selectedShellID = shell.id
         model.shells = []
+        model.started = []
         model.quickNewTerminal()
-        assert(model.shells == [remote.id], "a standalone shell on a filtered-out device is not reused")
-
+        assert(model.shells == [local.id] && model.started.isEmpty && model.newSession == nil,
+               "standalone shell bypasses the sheet")
         model.selectedShellID = nil
         model.shellSessions = []
-        model.setDeviceFilter(nil)
+        model.shells = []
+
+        // A device filter never changes fixed-terminal routing; the sheet
+        // revalidates the chosen space when Confirm is pressed.
+        model.selectedShellID = nil
+        model.shellSessions = []
+        model.setDeviceFilter(remote.id)
         model.selectedSpace = nil
         model.shells = []
+        model.newSession = nil
         model.quickNewTerminal()
-        assert(model.shells == [local.id], "no selection falls back to the first device")
+        assert(model.newSession == .terminal && model.shells.isEmpty && model.started.isEmpty,
+               "a filtered attached session still opens the terminal sheet")
 
-        // Per-kind agent launch obeys the same boundary.
+        model.setDeviceFilter(nil)
+        model.selectedSpace = nil
+        model.newSession = nil
+        model.quickNewTerminal()
+        assert(model.newSession == .terminal && model.shells.isEmpty,
+               "All Spaces opens the terminal sheet")
+
+        // Priority sessions keep a remembered space that can disagree with
+        // the focused session, so they ask instead of creating there.
+        model.prioritySessionsEnabled = true
+        model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
+        model.newSession = nil
+        model.started = []
+        model.quickNewTerminal()
+        assert(model.newSession == .terminal && model.started.isEmpty,
+               "Priority sessions ask for the space")
+        model.prioritySessionsEnabled = false
+
+        // Per-kind shortcuts: a filtered-out space cannot start an agent,
+        // so the sheet asks. A selected live space launches there.
         model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
         model.setDeviceFilter(remote.id)
+        model.newSession = nil
         model.quickNewAgent(kind: "pi")
-        assert(model.launched.isEmpty, "a filtered-out space does not start an agent")
+        assert(model.newSession == .agent("pi") && model.launched.isEmpty,
+               "a filtered-out space cannot start an agent")
         model.setDeviceFilter(nil)
         model.selectedSpace = SpaceRef(deviceID: local.id, workspaceID: "w1")
+        model.newSession = nil
+        model.launched = []
         model.quickNewAgent(kind: "pi")
-        assert(model.launched.count == 1 && model.launched[0].0 == local.id && model.launched[0].2 == "w1",
-               "per-kind agent launch still works in the selected space")
+        assert(model.newSession == nil && model.launched.count == 1
+               && model.launched[0].0 == local.id && model.launched[0].1 == "pi" && model.launched[0].2 == "w1",
+               "a selected space launches the agent there")
 
         // Creating a session from All Spaces must not steal the space filter.
         model.selectedSpace = nil
@@ -319,9 +380,20 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
         assert(AppShortcutID.allCases.first == .newItem, "New is listed above New Terminal")
         assert(AppShortcutID.allCases.map { $0.rawValue }.sorted() == [
             "close", "equalizeSplits", "focusDown", "focusLeft", "focusRight", "focusUp",
-            "growPane", "narrowPane", "newItem", "newSpace", "quickNewTerminal", "shrinkPane",
-            "splitHorizontal", "splitVertical", "swapDown", "swapLeft", "swapRight", "swapUp", "widenPane"
+            "growPane", "narrowPane", "newItem", "newSpace", "quickNewTerminal", "search", "settings",
+            "shrinkPane", "splitHorizontal", "splitVertical", "swapDown", "swapLeft",
+            "swapRight", "swapUp", "toggleSidebar", "widenPane"
         ], "the general shortcut set includes New plus every split command and no retired New Agent command")
+        assert(AppShortcutID.primaryCases.map(\.rawValue) == [
+            "newItem", "quickNewTerminal", "newSpace", "search", "settings", "toggleSidebar", "close",
+            "splitVertical", "splitHorizontal"
+        ], "everyday shortcuts stay in the always-visible General list")
+        assert(AppShortcutID.advancedCases.map(\.rawValue) == [
+            "focusLeft", "focusRight", "focusUp", "focusDown",
+            "swapLeft", "swapRight", "swapUp", "swapDown",
+            "widenPane", "narrowPane", "growPane", "shrinkPane",
+            "equalizeSplits"
+        ], "pane focus, swap, and resize stay collapsed under Advanced")
 
         assert(Set(AppShortcutID.allCases.map { $0.defaultChord }).count == AppShortcutID.allCases.count)
         for (id, focus) in [(AppShortcutID.swapLeft, AppShortcutID.focusLeft), (.swapRight, .focusRight), (.swapUp, .focusUp), (.swapDown, .focusDown)] {
@@ -348,6 +420,7 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
                "menus and help show the custom binding")
         store.removePersistentDomain(forName: suite)
         defaults.removeObject(forKey: SidebarSectionID.spacesHiddenKey)
+        defaults.removeObject(forKey: Model.selectedSpaceKey)
         print("PASS: hidden-space scope, last-session restore, filter-safe routing, shortcut boundaries")
     }
 }
@@ -357,7 +430,8 @@ enum HerdrService { static func bypassFlags(for kind: String) -> [String]? { nil
 all_sources = "\n".join(p.read_text() for p in (ROOT / "Sources").rglob("*.swift"))
 for stale in [
     "sessionsHiddenKey", "sessionsExpandedKey", "agentsHiddenKey", "terminalsHiddenKey",
-    "showNewAgent", "NewAgentSheet", "NewTerminalSheet",
+    "showNewAgent", "NewAgentSheet", "NewTerminalSheet", "NewTerminalSpaceSheet",
+    "showNewTerminalSpacePicker",
 ]:
     assert stale not in all_sources, f"removed sidebar/agent-picker wiring came back: {stale}"
 assert "func quickNewAgent(kind: String)" in source, "per-kind agent launch must stay"
@@ -366,14 +440,19 @@ assert "showNewItem" in source, "New panel is a distinct sheet flag"
 assert "case newItem" in shortcuts, "New is a general shortcut above New Terminal"
 assert commands.index('Button("New") { focusedModel?.showNewItem = true }') < commands.index(
     'Button("New Terminal") { focusedModel?.quickNewTerminal() }'
-), "File menu lists New above New Terminal"
-assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
+), "File menu lists New above New Terminal"assert "func createNewSession(" in source, "the New Session sheet confirms through one path"
+assert 'newSession = .choose' in (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text(), (
+    "the Priority sessions header plus opens the session sheet"
+)assert "func revealCreatedSession(" in source, "created sessions share one reveal path"
 assert "0.5" in source[source.index("func requestCreatedSessionFocus("):source.index("func focusSplit(")], "slow attach needs a late focus retry"
 root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()
 assert "struct NewItemSheet" in root_view, "New panel lives next to New Space"
 become_key = root_view.split("NSWindow.didBecomeKeyNotification", 1)[1]
 assert "pendingCreatedSessionFocus = false" not in become_key.split("private func paneHandleInset", 1)[0], "key-window noise must not flush created-session focus"
-assert "func activateSpace(" in source, "empty spaces open a terminal on click"
+activate = slice_between("    func activateSpace(", "\n    /// Best-effort root path")
+assert "selectSpace(ref)" in activate and "reviveRetainedSpace(" not in activate, (
+    "empty-space click must keep the placeholder, not spawn a terminal"
+)
 assert "Create first: closing the last pane" not in source, "last-tab close must not spawn a replacement"
 root_view = (ROOT / "Sources/GooseAgent/ContentView.swift").read_text()
 assert ".onChange(of: spacesHidden, initial: true)" in root_view
@@ -382,7 +461,9 @@ sidebar = (ROOT / "Sources/GooseAgent/SidebarView.swift").read_text()
 assert "if !spacesHidden {" in sidebar
 assert 'Toggle("Spaces"' in (ROOT / "Sources/GooseAgent/GooseAgentApp.swift").read_text()
 catalog = json.loads((ROOT / "Resources/Localizable.xcstrings").read_text())["strings"]
-for gone in ["New Agent", "New Agent…", "Sessions", "Hide Sessions", "Default agent", "Show in New Agent"]:
+for gone in ["New Agent", "New Agent…", "Hide Sessions", "Default agent", "Show in New Agent",
+            "No terminals — click to create one",
+            "This space has no terminals. Click the space name to create one."]:
     assert gone not in catalog, f"dead localization came back: {gone}"
 
 with tempfile.TemporaryDirectory(prefix="space-route-") as directory:
