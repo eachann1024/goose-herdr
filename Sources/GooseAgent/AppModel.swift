@@ -2319,10 +2319,13 @@ final class AppModel: ObservableObject {
     }
 
     /// Reorders a Space by dropping it on another Space of the same device.
-    /// Cross-device drops are ignored; herdr remains the source of truth after refresh.
+    /// Cross-device drops are ignored; herdr stays the source of truth for the
+    /// live rows after refresh.
     func moveSpace(_ source: SpaceEntry, onto target: SpaceEntry, placeAfter: Bool) {
         guard source.device.id == target.device.id else { return }
-        let orderedIDs = session(source.device.id).workspaces.map(\.workspaceID)
+        let deviceID = source.device.id
+        guard let current = sessions[deviceID]?.workspaces else { return }
+        let orderedIDs = current.map(\.workspaceID)
         guard let plan = WorkspaceReorder.plan(
             moving: source.workspace.workspaceID,
             onto: target.workspace.workspaceID,
@@ -2330,28 +2333,55 @@ final class AppModel: ObservableObject {
             orderedIDs: orderedIDs
         ) else { return }
 
-        if let current = sessions[source.device.id]?.workspaces {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                sessions[source.device.id]?.workspaces = WorkspaceReorder.applying(
-                    current,
-                    id: \.workspaceID,
-                    plan: plan
-                )
-            }
+        let reordered = WorkspaceReorder.applying(current, id: \.workspaceID, plan: plan)
+        // A closed space kept as a gray placeholder moves here and nowhere else:
+        // its dead `workspace_id` would be rejected with `workspace_not_found`, so
+        // the backend call is derived from the live rows alone and is skipped
+        // when those keep their relative order.
+        let backend = WorkspaceReorder.liveMove(
+            moving: source.workspace.workspaceID,
+            previousOrder: orderedIDs,
+            newOrder: reordered.map(\.workspaceID),
+            isLive: { !isRetainedSpace(SpaceRef(deviceID: deviceID, workspaceID: $0)) }
+        )
+        withAnimation(.easeInOut(duration: 0.2)) {
+            sessions[deviceID]?.workspaces = reordered
         }
+        storeRetainedSlots(deviceID: deviceID, orderedIDs: reordered.map(\.workspaceID))
+        guard let backend else { return }
 
         Task {
             do {
                 try await service(for: source.device).moveWorkspaceBlock(
-                    workspaceIDs: plan.workspaceIDs,
-                    beforeWorkspaceID: plan.beforeWorkspaceID
+                    workspaceIDs: backend.workspaceIDs,
+                    beforeWorkspaceID: backend.beforeWorkspaceID
                 )
-                await refresh(source.device.id)
+                await refresh(deviceID)
             } catch {
-                await refresh(source.device.id)
+                // herdr kept the old order: put the row and the gray slots back
+                // and still surface the failure.
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    sessions[deviceID]?.workspaces = current
+                }
+                storeRetainedSlots(deviceID: deviceID, orderedIDs: orderedIDs)
+                await refresh(deviceID)
                 actionError = actionErrorMessage(error, device: source.device)
             }
         }
+    }
+
+    /// Writes each gray row's slot from the sidebar order and persists it, so the
+    /// next merge — refresh or relaunch — rebuilds the same list.
+    private func storeRetainedSlots(deviceID: UUID, orderedIDs: [String]) {
+        var changed = false
+        for index in retainedSpaces.indices where retainedSpaces[index].deviceID == deviceID {
+            guard let slot = orderedIDs.firstIndex(of: retainedSpaces[index].workspaceID),
+                  retainedSpaces[index].sortIndex != slot
+            else { continue }
+            retainedSpaces[index].sortIndex = slot
+            changed = true
+        }
+        if changed { RetainedSpaceStore.save(retainedSpaces) }
     }
 
     /// Reorders a session tab by dropping it on another session in the same space.
