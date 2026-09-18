@@ -28,19 +28,30 @@ struct SidebarView: View {
     @State private var sessionDrop: (id: String, after: Bool)?
     @AppStorage(SidebarSectionID.spacesHiddenKey) private var spacesHidden = false
     @AppStorage(SidebarSectionID.spacesExpandedKey) private var spacesExpanded = true
-    @AppStorage(AppShortcuts.revisionKey) private var shortcutsRevision = 0
     @AppStorage(SidebarActionID.newTerminal.hiddenKey) private var newTerminalHidden = false
     @AppStorage(SidebarActionID.newSpace.hiddenKey) private var newSpaceHidden = false
     @AppStorage(SidebarActionID.files.hiddenKey) private var filesHidden = false
     @AppStorage(SidebarActionID.search.hiddenKey) private var searchHidden = false
     @StateObject private var sessionIndexHints = SessionIndexHintController()
+    @AppStorage(AppModel.prioritySessionsKey) private var prioritySessions = false
+    @FocusState private var bellFocused: Bool
+
+    private var showsPrioritySessions: Bool { prioritySessions && !spacesHidden }
+
+    /// The header's plus follows the section: Priority sessions put sessions
+    /// there, and space creation moved inside that sheet.
+    private var addButtonTitle: LocalizedStringKey {
+        showsPrioritySessions ? "New Session" : "New Space"
+    }
 
     var body: some View {
+        let sessions = model.sidebarSessions
+        let firstOtherID = sessions.first(where: { !model.isPriorityGroup($0) })?.id
         VStack(spacing: 0) {
             // 28pt titlebar strip: traffic lights on the left, collapse toggle on the right
             HStack {
                 Spacer()
-                TitlebarIconButton(systemName: "sidebar.left", help: "Hide Sidebar (⌘B)") {
+                TitlebarIconButton(systemName: "sidebar.left", title: "Hide Sidebar", shortcut: .toggleSidebar) {
                     collapsed = true
                 }
             }
@@ -75,22 +86,44 @@ struct SidebarView: View {
             ScrollView {
                 VStack(spacing: 1) {
                     if !spacesHidden {
-                        sectionHeader("Spaces") {
+                        sectionHeader(showsPrioritySessions ? "High priority" : "Spaces") {
                             sectionAddButton(
                                 systemImage: "plus",
-                                help: String(localized: "New Space") + " (\(AppShortcuts.display(for: .newSpace)))"
+                                title: addButtonTitle,
+                                shortcut: showsPrioritySessions ? nil : .newSpace
                             ) {
-                                model.showNewSpace = true
+                                if showsPrioritySessions {
+                                    model.newSession = .choose
+                                } else {
+                                    model.showNewSpace = true
+                                }
                             }
-                            .accessibilityLabel(Text("New Space"))
+                            .accessibilityLabel(Text(addButtonTitle))
+                            Button {
+                                prioritySessions.toggle()
+                                bellFocused = true
+                            } label: {
+                                Image(systemName: prioritySessions ? "bell.fill" : "bell")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .frame(width: 24, height: 24)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .focused($bellFocused)
+                            .codexTooltip("Priority sessions")
+                            .accessibilityLabel(Text("Priority sessions"))
+                            .accessibilityValue(Text(prioritySessions ? "On" : "Off"))
+                            .accessibilityAddTraits(prioritySessions ? .isSelected : [])
                         }
-                        if spacesExpanded {
+                        if spacesExpanded && !showsPrioritySessions {
                             allSpacesRow
                             ForEach(model.visibleSpaces) { entry in
                                 SpaceRowView(
                                     entry: entry,
                                     model: model,
                                     isEmpty: model.isEmptySpace(entry),
+                                    showIndexHints: sessionIndexHints.isShowingSpaces,
                                     draggingSpaceID: $draggingSpaceID,
                                     spaceDrop: $spaceDrop
                                 )
@@ -100,32 +133,72 @@ struct SidebarView: View {
                     }
 
                     Group {
-                            if model.visibleSessions.isEmpty && model.shellSessions.isEmpty {
+                            if !showsPrioritySessions, sessions.isEmpty, model.shellSessions.isEmpty {
                                 Text(emptySessionsHint)
                                     .font(.system(size: 11.5))
                                     .foregroundStyle(Theme.textGhost)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(8)
                             }
-                            ForEach(model.visibleSessions) { entry in
-                                switch entry {
-                                case .agent(let agent):
-                                    AgentRowView(
-                                        entry: agent,
-                                        model: model,
-                                        showIndexHints: sessionIndexHints.isShowing,
-                                        draggingSessionID: $draggingSessionID,
-                                        sessionDrop: $sessionDrop
-                                    )
-                                case .terminal(let terminal):
-                                    TerminalRowView(
-                                        entry: terminal,
-                                        model: model,
-                                        showIndexHints: sessionIndexHints.isShowing,
-                                        draggingSessionID: $draggingSessionID,
-                                        sessionDrop: $sessionDrop
-                                    )
+                            if showsPrioritySessions, !sessions.contains(where: model.isPriorityGroup) {
+                                Text("No sessions need attention")
+                                    .font(Theme.sidebarRowMeta)
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(8)
+                            }
+                            ForEach(sessions) { entry in
+                                if showsPrioritySessions, entry.id == firstOtherID {
+                                    sessionGroupHeader("Other sessions")
                                 }
+                                Group {
+                                    switch entry {
+                                    case .agent(let agent):
+                                        AgentRowView(
+                                            entry: agent,
+                                            model: model,
+                                            showsSpace: showsPrioritySessions,
+                                            showIndexHints: sessionIndexHints.isShowing,
+                                            draggingSessionID: $draggingSessionID,
+                                            sessionDrop: $sessionDrop
+                                        )
+                                    case .terminal(let terminal):
+                                        TerminalRowView(
+                                            entry: terminal,
+                                            model: model,
+                                            showsSpace: showsPrioritySessions,
+                                            showIndexHints: sessionIndexHints.isShowing,
+                                            draggingSessionID: $draggingSessionID,
+                                            sessionDrop: $sessionDrop
+                                        )
+                                    }
+                                }
+                                .focusable(showsPrioritySessions)
+                                .onKeyPress(keys: [.return, .space]) { _ in
+                                    guard showsPrioritySessions else { return .ignored }
+                                    model.selectAgent(entry.ref)
+                                    return .handled
+                                }
+                                .accessibilityAddTraits(
+                                    !model.isFileManagerActive && model.selectedShellID == nil
+                                        && model.selectedPane == entry.ref ? .isSelected : []
+                                )
+                            }
+                            if showsPrioritySessions, firstOtherID == nil {
+                                sessionGroupHeader("Other sessions")
+                            }
+                            if let launch = model.piLaunch, launch.pane == nil, model.showsPiLaunch {
+                                HStack {
+                                    Text(verbatim: "Pi")
+                                    Spacer()
+                                    ProgressView().controlSize(.small)
+                                }
+                                .padding(8)
+                                .frame(height: 51)
+                                .background(Theme.itemWashSelected, in: RoundedRectangle(cornerRadius: 7))
+                                .anchorPreference(key: PiLaunchOriginKey.self, value: .bounds) { $0 }
+                                .accessibilityLabel(Text("Loading Pi"))
                             }
                             ForEach(model.shellSessions) { session in
                                 shellRow(session)
@@ -145,12 +218,38 @@ struct SidebarView: View {
         }
         .frame(width: 260)
         .background(VisualEffectView(material: .sidebar).ignoresSafeArea())
+        .onChange(of: showsPrioritySessions) {
+            draggingSpaceID = nil
+            spaceDrop = nil
+            draggingSessionID = nil
+            sessionDrop = nil
+            model.objectWillChange.send()
+        }
+        // Only SwiftUI focus inside this sidebar handles Escape; terminal responders are siblings.
+        .onKeyPress(.escape) {
+            guard showsPrioritySessions else { return .ignored }
+            prioritySessions = false
+            bellFocused = true
+            return .handled
+        }
+    }
+
+    private func sessionGroupHeader(_ title: LocalizedStringKey) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(Theme.sidebarGroupHeader)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(Theme.textSecondary)
+        .padding(8)
     }
 
     private var emptySessionsHint: String {
         switch model.connection {
         case .connecting: return String(localized: "Connecting…")
-        case .failed(let reason): return reason
+        case .failed: return String(localized: "Couldn't connect")
+        case .idle: return String(localized: "Not connected")
         default: return String(localized: "No sessions")
         }
     }
@@ -226,25 +325,33 @@ struct SidebarView: View {
         @ViewBuilder trailing: () -> Trailing
     ) -> some View {
         HStack(spacing: 5) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { spacesExpanded.toggle() }
-            } label: {
-                HStack(spacing: 5) {
-                    Text(title)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(Theme.textTertiary)
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Theme.textGhost)
-                        .rotationEffect(.degrees(spacesExpanded ? 90 : 0))
-                    Spacer(minLength: 0)
+            if showsPrioritySessions {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Theme.accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { spacesExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(title)
+                            .font(.system(size: 12.5, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(Theme.textGhost)
+                            .rotationEffect(.degrees(spacesExpanded ? 90 : 0))
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .focusEffectDisabled()
+                .accessibilityLabel(title)
+                .accessibilityValue(Text(spacesExpanded ? "Expanded" : "Collapsed"))
             }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
-            .accessibilityLabel(title)
-            .accessibilityValue(Text(spacesExpanded ? "Expanded" : "Collapsed"))
             trailing()
         }
         .padding(.horizontal, 8)
@@ -348,6 +455,7 @@ struct SidebarView: View {
             )
             .overlay {
                 TerminalRowDragHost(
+                    allowsDrag: !model.prioritySessionsEnabled,
                     entryID: entry.id,
                     onClick: { model.selectAgent(entry.ref) },
                     onRename: { model.terminalToRename = entry },
@@ -429,49 +537,83 @@ struct SidebarView: View {
             && model.selectedPane == entry.ref
             && model.selectedShellID == nil
         let unread = model.isUnread(entry)
+        let priority = showsSpace && model.isPriorityGroup(.agent(entry))
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text(entry.title)
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(Theme.text)
-                    .lineLimit(1)
+                Group {
+                    if showsSpace {
+                        Text(entry.title).codexTooltip(verbatim: entry.title)
+                    } else {
+                        Text(entry.title)
+                    }
+                }
+                .font(showsSpace ? Theme.sidebarRowTitle : .system(size: 13.5))
+                .fontWeight(priority ? .semibold : .regular)
+                .foregroundStyle(Theme.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
                 Spacer(minLength: 0)
                 SidebarSessionIndexSlot(
                     visible: showIndexHints,
-                    number: model.sessionSwitchNumber(for: .agent(entry.ref))
+                    number: model.sessionSwitchNumber(for: .agent(entry.ref)),
+                    keepsStatus: true
                 ) {
-                    AgentStatusGlyph(status: agent.status, unreadDone: unread)
+                    if model.piLaunch?.pane == entry.ref, model.showsPiLaunch,
+                       !showsSpace || agent.status != .blocked {
+                        if model.piLaunch?.failed == true {
+                            Image(systemName: "exclamationmark.circle").foregroundStyle(Theme.warning)
+                        } else {
+                            ProgressView().controlSize(.small).accessibilityLabel(Text("Loading Pi"))
+                        }
+                    } else {
+                        HStack(spacing: 4) {
+                            AgentStatusGlyph(status: agent.status, unreadDone: unread)
+                            if let title = priorityStatusTitle {
+                                Text(verbatim: title)
+                                    .font(Theme.sidebarRowMeta)
+                                    .foregroundStyle(Theme.textSecondary)
+                            }
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                    }
                 }
             }
             HStack(spacing: 5) {
-                AgentKindBadge(kind: agent.agent)
+                AgentKindBadge(
+                    kind: agent.agent,
+                    fontSize: showsSpace ? 11 : 11.5,
+                    color: showsSpace ? Theme.textSecondary : Theme.textTertiary
+                )
+                .fixedSize(horizontal: showsSpace, vertical: false)
                 Text("·")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.textGhost)
+                    .font(showsSpace ? Theme.sidebarRowMeta : .system(size: 11.5))
+                    .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textGhost)
                 ProjectSpaceIcon(
                     path: model.spaceIconPath(device: entry.device, workspaceID: agent.workspaceID),
                     size: 11,
                     slot: 11
                 )
-                .foregroundStyle(Theme.textTertiary)
+                .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textTertiary)
                 Text(model.spaceName(deviceID: entry.device.id, workspaceID: agent.workspaceID))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.textTertiary)
+                    .font(showsSpace ? Theme.sidebarRowMeta : .system(size: 11.5))
+                    .foregroundStyle(showsSpace ? Theme.textSecondary : Theme.textTertiary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Spacer(minLength: 0)
-                if agent.status == .blocked {
+                if !showsSpace, agent.status == .blocked {
                     Text("needs input")
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.warning)
                 }
                 if model.showsRowDeviceBadges {
                     DeviceChip(device: entry.device)
+                        .layoutPriority(showsSpace ? 1 : 0)
                 }
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .frame(height: 51)
+        .padding(.vertical, showsSpace ? 8 : 7)
+        .frame(minHeight: showsSpace ? 54 : 51, maxHeight: showsSpace ? nil : 51)
         .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 7)
@@ -485,6 +627,7 @@ struct SidebarView: View {
         )
         .overlay {
             AgentRowDragHost(
+                allowsDrag: !model.prioritySessionsEnabled,
                 entryID: entry.id,
                 onClick: { model.selectAgent(entry.ref) },
                 onRename: { model.agentToRename = entry },
