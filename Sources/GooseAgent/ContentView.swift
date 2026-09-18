@@ -1035,12 +1035,15 @@ private enum SheetCardMetrics {
 }
 
 /// Stable sheet widths — prefer min/ideal/max equal so AppKit doesn't reflow on click.
-private enum SheetLayout {
+enum SheetLayout {
+    static let usage: CGFloat = 320
     static let narrow: CGFloat = 400
     static let search: CGFloat = 440
     static let medium: CGFloat = 540
     static let wide: CGFloat = 580
     static let directoryBrowserHeight: CGFloat = 220
+    static let spaceListHeight: CGFloat = 240
+    static let sessionBodyHeight: CGFloat = 480
 }
 
 private extension View {
@@ -1097,6 +1100,7 @@ struct SheetChoiceCard<Icon: View>: View {
         }
     }
 
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: 7) {
@@ -1105,7 +1109,7 @@ struct SheetChoiceCard<Icon: View>: View {
                     .foregroundStyle(selected ? Theme.accent : Theme.textSecondary)
                     .frame(width: SheetCardMetrics.iconSize, height: SheetCardMetrics.iconSize)
                 Text(title)
-                    .font(.system(size: 11.5, weight: selected ? .medium : .regular))
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(selected ? Theme.text : Theme.textSecondary)
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
@@ -1134,6 +1138,12 @@ struct SheetChoiceCard<Icon: View>: View {
     }
 }
 
+
+/// One sheet for the session about to be opened: the space on top, then what to
+/// open in it. Priority sessions and All Spaces show every space at once, so the
+/// remembered filter can disagree with the focused session — the sheet asks
+/// instead of creating in whichever space the filter happens to name, and it is
+/// also where a space gets created without leaving the sheet.
 struct NewItemSheet: View {
     @ObservedObject var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -1226,22 +1236,35 @@ struct NewItemSheet: View {
             }
             .focusEffectDisabled()
         } else {
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
-                spacing: SheetCardMetrics.gridSpacing
-            ) {
-                ForEach(spaces) { entry in
-                    SheetChoiceCard(
-                        title: spaceTitle(entry),
-                        selected: selectedSpace?.id == entry.id
+            let deviceIDs = spaces.map(\.device.id).reduce(into: [UUID]()) { ids, id in
+                if !ids.contains(id) { ids.append(id) }
+            }
+            ForEach(deviceIDs, id: \.self) { deviceID in
+                let deviceSpaces = spaces.filter { $0.device.id == deviceID }
+                VStack(alignment: .leading, spacing: 8) {
+                    if deviceIDs.count > 1, let device = deviceSpaces.first?.device {
+                        Text(device.name)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Theme.textTertiary)
+                    }
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                        spacing: SheetCardMetrics.gridSpacing
                     ) {
-                        spaceID = entry.id
-                    } icon: {
-                        ProjectSpaceIcon(
-                            path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID),
-                            size: 16,
-                            slot: SheetCardMetrics.iconSize
-                        )
+                        ForEach(deviceSpaces) { entry in
+                            SheetChoiceCard(
+                                title: entry.workspace.label,
+                                selected: selectedSpace?.id == entry.id
+                            ) {
+                                spaceID = entry.id
+                            } icon: {
+                                ProjectSpaceIcon(
+                                    path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID),
+                                    size: 16,
+                                    slot: SheetCardMetrics.iconSize
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1288,16 +1311,9 @@ struct NewItemSheet: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func spaceTitle(_ entry: AppModel.SpaceEntry) -> String {
-        if model.showsDeviceBadges {
-            return "\(entry.workspace.label) · \(entry.device.name)"
-        }
-        return entry.workspace.label
-    }
-
     private func syncDefaults() {
         if spaceID == nil {
-            spaceID = model.selectedSpace.flatMap { ref in
+            spaceID = model.newSessionDefaultSpace.flatMap { ref in
                 spaces.first { $0.ref == ref }?.id
             } ?? spaces.first?.id
         }
@@ -1307,7 +1323,382 @@ struct NewItemSheet: View {
 
     private func syncKindIfNeeded() {
         if let kind, kinds.contains(kind) { return }
-        kind = kinds.first
+        let currentKind = model.selectedShell == nil ? model.selectedEntry?.agent.agentKindRaw : nil
+        kind = currentKind.flatMap { kinds.contains($0) ? $0 : nil } ?? kinds.first
+    }
+}
+
+private struct NewSessionSheet: View {
+    @ObservedObject var model: AppModel
+    @Environment(\.dismiss) private var dismiss
+
+    /// `.choose` offers the type grid; a type fixed by a shortcut (⌘T, an Agent
+    /// kind) hides it, because that question is already answered.
+    private let request: NewSessionType
+    @State private var space: SpaceRef?
+    @State private var type: NewSessionType
+    /// The space this sheet created, so Confirm opens in the root shell herdr
+    /// made with it instead of stacking a second tab on a space seconds old.
+    @State private var createdSpace: CreatedSpace?
+    @State private var showsNewSpaceForm = false
+    @State private var newSpaceDeviceID: UUID
+    // The trailing slash keeps typing in filter position from the first keystroke.
+    @State private var directory = "~/"
+    @State private var label = ""
+    @State private var isCreatingSpace = false
+    @State private var spaceFormError: String?
+
+    private static let spaceColumns = Array(
+        repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing),
+        count: 2
+    )
+    private static let typeColumns = Array(
+        repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing),
+        count: 4
+    )
+
+    init(model: AppModel, request: NewSessionType) {
+        self.model = model
+        self.request = request
+        let defaultSpace = model.newSessionDefaultSpace
+        _space = State(initialValue: defaultSpace)
+        _type = State(initialValue: request == .choose ? .terminal : request)
+        _newSpaceDeviceID = State(
+            initialValue: (defaultSpace.flatMap { model.device($0.deviceID) }
+                ?? model.deviceFilter.flatMap { model.device($0) }
+                ?? model.devices.first
+                ?? .local).id
+        )
+    }
+
+    /// Resolved against the live list, so a space closed while the sheet is open
+    /// creates nothing rather than silently landing in another one.
+    private var chosenEntry: AppModel.SpaceEntry? {
+        model.visibleSpaces.first { $0.ref == space }
+    }
+
+    private var chosenDevice: Device { model.device(newSpaceDeviceID) ?? .local }
+
+    /// Agent kinds herdr reports for the chosen space's device, in the user's
+    /// order and minus the kinds switched off in Settings.
+    private var agentKinds: [String] {
+        guard let device = chosenEntry?.device else { return [] }
+        return AgentKindOrder.visibleSorted(model.session(device.id).agentCatalog.kinds)
+    }
+
+    /// The root shell of the space this sheet created. Any other space needs a
+    /// normal tab, so the reuse stops the moment the selection moves on.
+    private var rootPaneID: String? {
+        guard let createdSpace, createdSpace.ref == space else { return nil }
+        return createdSpace.rootPaneID
+    }
+
+    private var headerIcon: String {
+        switch request {
+        case .choose, .terminal: return "terminal"
+        case .agent: return "sparkles"
+        }
+    }
+
+    private var subtitle: String {
+        switch request {
+        case .choose: return String(localized: "Choose a space and what to open in it")
+        case .terminal: return String(localized: "Choose a space for the new terminal")
+        case .agent: return String(localized: "Choose a space for the new agent")
+        }
+    }
+
+    /// A space that vanished stays named instead of being swapped for another one.
+    private var spaceNotice: String? {
+        space != nil && chosenEntry == nil ? String(localized: "That space no longer exists") : nil
+    }
+
+    /// A kind the shortcut fixed — or the grid has selected — that this device
+    /// does not offer, which keeps Confirm off instead of creating the wrong
+    /// session. A catalog that is still loading gets the benefit of the doubt:
+    /// agent.start reports the real failure.
+    private var unavailableAgent: String? {
+        guard case .agent(let kind) = type, let device = chosenEntry?.device else { return nil }
+        let offered: Bool
+        switch model.session(device.id).agentCatalog {
+        case .loading:
+            return nil
+        case .failed:
+            offered = false
+        case .loaded:
+            offered = agentKinds.contains(kind)
+        }
+        guard !offered else { return nil }
+        return String(localized: "\(AgentKindLabel.display(kind)) is not available on this device")
+    }
+
+    /// What the type grid says while the device has nothing to launch.
+    private var emptyCatalogNotice: String? {
+        guard request == .choose, let device = chosenEntry?.device else { return nil }
+        switch model.session(device.id).agentCatalog {
+        case .loading:
+            return String(localized: "Loading agents…")
+        case .failed:
+            return String(localized: "No agents available on this device")
+        case .loaded:
+            return agentKinds.isEmpty ? String(localized: "No agents available on this device") : nil
+        }
+    }
+
+    private var canCreate: Bool {
+        guard !isCreatingSpace, chosenEntry != nil, unavailableAgent == nil else { return false }
+        return type != .choose
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SheetHeader(systemImage: headerIcon, title: String(localized: "New Session"), subtitle: subtitle)
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    spaceSection
+                    if let spaceNotice { notice(spaceNotice, color: Theme.danger) }
+                    if let unavailableAgent { notice(unavailableAgent, color: Theme.danger) }
+                    newSpaceSection
+                    if request == .choose {
+                        typeSection
+                        if let emptyCatalogNotice { notice(emptyCatalogNotice, color: Theme.textTertiary) }
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: SheetLayout.sessionBodyHeight)
+
+            Rectangle().fill(Theme.hairline).frame(height: 1)
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                    .focusEffectDisabled()
+                Button("Create") {
+                    model.createNewSession(in: space, type: type, rootPaneID: rootPaneID)
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.accent)
+                // While the space form is open Return belongs to it, so
+                // half-typed input cannot fire as a session elsewhere.
+                .keyboardShortcut(showsNewSpaceForm ? nil : .defaultAction)
+                .focusEffectDisabled()
+                .disabled(!canCreate)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+        .sheetFixedWidth(SheetLayout.medium)
+        .herdrmHideFocusRing()
+    }
+
+    private var spaceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SheetSectionLabel("SPACE")
+            if model.visibleSpaces.isEmpty {
+                Text("Create a space on this device before opening a session.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textTertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else {
+                LazyVGrid(columns: Self.spaceColumns, spacing: SheetCardMetrics.gridSpacing) {
+                    ForEach(model.visibleSpaces) { entry in
+                        spaceCard(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Name first, then whatever tells same-named spaces on two devices apart.
+    private func spaceCard(_ entry: AppModel.SpaceEntry) -> some View {
+        let isSelected = entry.ref == space
+        let detail = [
+            model.showsRowDeviceBadges ? entry.device.name : nil,
+            model.spacePath(for: entry),
+        ].compactMap { $0 }.joined(separator: " · ")
+        return Button {
+            space = entry.ref
+        } label: {
+            HStack(spacing: 8) {
+                ProjectSpaceIcon(
+                    path: model.spaceIconPath(device: entry.device, workspaceID: entry.workspace.workspaceID)
+                )
+                .foregroundStyle(isSelected ? Theme.textSecondary : Theme.textTertiary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.workspace.label)
+                        .font(.system(size: 12.5, weight: isSelected ? .medium : .regular))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                    if !detail.isEmpty {
+                        Text(detail)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .frame(height: SheetCardMetrics.height)
+            .background(
+                RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius)
+                    .fill(isSelected ? AnyShapeStyle(Theme.accentWash) : AnyShapeStyle(Theme.itemWash))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius)
+                    .strokeBorder(isSelected ? Theme.accent : .clear, lineWidth: 1.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius))
+        }
+        .buttonStyle(.plain)
+        .herdrmHideFocusRing()
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The space list carries the creation form inside the sheet; a second sheet
+    /// would hide the list the new space lands in.
+    private var newSpaceSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                showsNewSpaceForm.toggle()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: showsNewSpaceForm ? "minus" : "plus")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text("New Space")
+                        .font(.system(size: 12))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .herdrmHideFocusRing()
+
+            if showsNewSpaceForm { newSpaceForm }
+        }
+    }
+
+    private var newSpaceForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if model.showsDeviceBadges {
+                SheetSectionLabel("DEVICE")
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: SheetCardMetrics.gridSpacing), count: 4),
+                    spacing: SheetCardMetrics.gridSpacing
+                ) {
+                    ForEach(model.devices) { device in
+                        SheetChoiceCard(
+                            title: device.name,
+                            systemImage: device.isLocal ? "laptopcomputer" : "desktopcomputer",
+                            selected: newSpaceDeviceID == device.id
+                        ) {
+                            newSpaceDeviceID = device.id
+                        }
+                    }
+                }
+            }
+
+            SheetSectionLabel("DIRECTORY")
+            DirectoryPickerField(model: model, device: chosenDevice, path: $directory)
+
+            SheetSectionLabel("NAME")
+            TextField("Defaults to the folder name", text: $label)
+                .textFieldStyle(.roundedBorder)
+
+            if let spaceFormError { notice(spaceFormError, color: Theme.danger) }
+
+            HStack(spacing: 8) {
+                Spacer()
+                if isCreatingSpace { ProgressView().controlSize(.small) }
+                Button("New Space") { createSpace() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.accent)
+                    .keyboardShortcut(.defaultAction)
+                    .focusEffectDisabled()
+                    .disabled(isCreatingSpace || directory.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius).fill(Theme.contentBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: SheetCardMetrics.cornerRadius)
+                .strokeBorder(Theme.hairline, lineWidth: 1)
+        )
+    }
+
+    private var typeSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SheetSectionLabel("TYPE")
+            LazyVGrid(columns: Self.typeColumns, spacing: SheetCardMetrics.gridSpacing) {
+                SheetChoiceCard(
+                    title: String(localized: "Terminal"),
+                    systemImage: "terminal",
+                    selected: type == .terminal
+                ) {
+                    type = .terminal
+                }
+                ForEach(agentKinds, id: \.self) { kind in
+                    SheetChoiceCard(
+                        title: AgentKindLabel.display(kind),
+                        selected: type == .agent(kind)
+                    ) {
+                        type = .agent(kind)
+                    } icon: {
+                        if let resource = BrandIconLoader.agentIcon(for: kind) {
+                            BrandIcon(resource: resource, size: SheetCardMetrics.iconSize, fallbackSystemName: "sparkles")
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func notice(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 11.5))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Selecting the new space and keeping the chosen type is the whole point:
+    /// creating a space here must not silently open a session in it too.
+    private func createSpace() {
+        guard !isCreatingSpace else { return }
+        let device = chosenDevice
+        let directory = self.directory
+        let label = self.label
+        isCreatingSpace = true
+        spaceFormError = nil
+        Task {
+            do {
+                let created = try await model.createSpace(device: device, directory: directory, label: label)
+                model.revealCreatedSpace(created)
+                space = created.ref
+                createdSpace = created
+                showsNewSpaceForm = false
+            } catch {
+                spaceFormError = model.actionErrorMessage(error, device: device)
+            }
+            isCreatingSpace = false
+        }
     }
 }
 
