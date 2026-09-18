@@ -50,7 +50,7 @@ struct PaneRef: Hashable, Codable {
     let paneID: String
 }
 
-struct SpaceRef: Hashable {
+struct SpaceRef: Hashable, Codable {
     let deviceID: UUID
     let workspaceID: String
 }
@@ -185,10 +185,17 @@ final class AppModel: ObservableObject {
                UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) {
                 selectedSpace = nil
             }
+            // Persisted so a relaunch restores the last space (nil = All Spaces).
+            if let selectedSpace, let data = try? JSONEncoder().encode(selectedSpace) {
+                UserDefaults.standard.set(data, forKey: Self.selectedSpaceKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.selectedSpaceKey)
+            }
         }
     }
     @Published var selectedPane: PaneRef? {
         didSet {
+            notePrioritySelection(from: oldValue)
             // Opening (or reselecting) a finished agent marks it viewed.
             // Also acknowledge a completion seen before leaving the current pane.
             if let old = oldValue, old != selectedPane {
@@ -505,6 +512,22 @@ final class AppModel: ObservableObject {
            let id = UUID(uuidString: raw),
            loaded.contains(where: { $0.id == id }) {
             deviceFilter = id
+        }
+        if let data = UserDefaults.standard.data(forKey: Self.selectedSpaceKey) {
+            selectedSpace = try? JSONDecoder().decode(SpaceRef.self, from: data)
+        }
+        // didSet does not run during init; apply the same drop rules and persist them.
+        if let filter = deviceFilter, let pane = selectedPane, pane.deviceID != filter {
+            selectedPane = nil
+            UserDefaults.standard.removeObject(forKey: Self.selectedPaneKey)
+        }
+        if selectedSpace != nil,
+           UserDefaults.standard.bool(forKey: SidebarSectionID.spacesHiddenKey) {
+            selectedSpace = nil
+            UserDefaults.standard.removeObject(forKey: Self.selectedSpaceKey)
+        } else if let filter = deviceFilter, let space = selectedSpace, space.deviceID != filter {
+            selectedSpace = nil
+            UserDefaults.standard.removeObject(forKey: Self.selectedSpaceKey)
         }
     }
 
@@ -1111,6 +1134,9 @@ final class AppModel: ObservableObject {
         // Named-session devices are only available after discovery.
         if let selectedPane, device(selectedPane.deviceID) == nil {
             self.selectedPane = nil
+        }
+        if let selectedSpace, device(selectedSpace.deviceID) == nil {
+            self.selectedSpace = nil
         }
     }
 
@@ -1814,7 +1840,6 @@ final class AppModel: ObservableObject {
                 do {
                     try await self.service(for: entry.device)
                         .closeWorkspace(workspaceID: entry.workspace.workspaceID)
-                    if self.selectedSpace == entry.ref { self.selectedSpace = nil }
                     await self.refresh(entry.device.id)
                 } catch {
                     self.actionError = self.actionErrorMessage(error, device: entry.device)
@@ -1969,7 +1994,6 @@ final class AppModel: ObservableObject {
                 for attach in attachSessions where attach.device.id == entry.device.id && attach.workspaceID == entry.workspace.workspaceID {
                     discardSplitGroup(attach.id)
                 }
-                if selectedSpace == space { selectedSpace = nil }
                 await refresh(entry.device.id)
             } catch {
                 actionError = actionErrorMessage(error, device: entry.device)
