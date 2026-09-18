@@ -267,7 +267,6 @@ struct SidebarView: View {
 
     private func quickActionRow(_ id: SidebarActionID, action: @escaping () -> Void) -> some View {
         let selected = quickActionSelected(id)
-        let _ = shortcutsRevision
         return Button(action: action) {
             HStack(spacing: 10) {
                 Group {
@@ -537,11 +536,13 @@ struct SidebarView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarRowButtonStyle(selected: selected))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private struct AgentRowView: View {
     let entry: AppModel.AgentEntry
     @ObservedObject var model: AppModel
+    var showsSpace = false
     var showIndexHints = false
     @Binding var draggingSessionID: String?
     @Binding var sessionDrop: (id: String, after: Bool)?
@@ -882,6 +883,18 @@ struct DevicePopover: View {
                             isPresented = false
                             model.deviceToEdit = device
                         }
+                        switch model.session(device.id).connection {
+                        case .connected, .connecting:
+                            Button(String(localized: "Close Connection")) {
+                                isPresented = false
+                                model.disconnectDevice(device)
+                            }
+                        case .failed, .idle:
+                            Button(String(localized: "Reconnect")) {
+                                isPresented = false
+                                model.reconnectDevice(device)
+                            }
+                        }
                         Button(String(localized: "Remove \(device.name)"), role: .destructive) {
                             isPresented = false
                             model.removeDevice(device)
@@ -1125,12 +1138,17 @@ private struct SpaceRowView: View {
                 if model.showsRowDeviceBadges {
                     DeviceChip(device: entry.device)
                 }
+            } else if model.showsRowDeviceBadges {
+                DeviceChip(device: entry.device)
+            }
+            SidebarSessionIndexSlot(
+                visible: showIndexHints,
+                number: model.spaceSwitchNumber(for: entry.ref)
+            ) {
                 Text("\(model.agentCount(in: entry))")
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textGhost)
                     .frame(minWidth: 20)
-            } else if model.showsRowDeviceBadges {
-                DeviceChip(device: entry.device)
             }
         }
         .padding(.horizontal, 8)
