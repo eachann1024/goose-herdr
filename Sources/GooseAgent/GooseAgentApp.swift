@@ -449,13 +449,13 @@ private struct AgentKindCommandItems: View {
         } else {
             ForEach(kinds, id: \.self) { kind in
                 if let chord = AgentKindShortcuts.chord(for: kind) {
-                    Button(AgentKindDisplay.name(for: kind)) {
+                    Button(AgentKindLabel.display(kind)) {
                         focusedModel?.quickNewAgent(kind: kind)
                     }
                     .keyboardShortcut(chord.keyEquivalent, modifiers: chord.modifiers)
                     .disabled(focusedModel == nil)
                 } else {
-                    Button(AgentKindDisplay.name(for: kind)) {
+                    Button(AgentKindLabel.display(kind)) {
                         focusedModel?.quickNewAgent(kind: kind)
                     }
                     .disabled(focusedModel == nil)
@@ -498,6 +498,7 @@ private enum SettingsLayout {
     static let width: CGFloat = 810
     static let height: CGFloat = 660
     static let sidebarWidth: CGFloat = 220
+    static let agentRowHeight: CGFloat = 40
     static let headerHeight: CGFloat = 52
     static let navigationHeight: CGFloat = 40
     static let rowHeight: CGFloat = 36
@@ -542,6 +543,9 @@ struct SettingsView: View {
         .ignoresSafeArea(.container, edges: .top)
         .background(SettingsWindowChrome())
         .herdrmHideFocusRing()
+        .onReceive(NotificationCenter.default.publisher(for: .openAgentSettings)) { _ in
+            pane = .agents
+        }
     }
 
     private var settingsSidebar: some View {
@@ -607,22 +611,7 @@ struct SettingsView: View {
     @ViewBuilder
     private var settingsDetail: some View {
         if pane == .agents {
-            // Keep the reorderable List bounded; never nest it in a ScrollView.
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Agent Applications")
-                        .font(.system(size: 13, weight: .semibold))
-                    Text("Only checked agents can have shortcuts and other settings.")
-                        .font(SettingsLayout.captionFont)
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 10)
-                AgentsSettingsView(model: model)
-                    .background(Theme.settingsGroup,
-                                in: RoundedRectangle(cornerRadius: SettingsLayout.cornerRadius))
-            }
-            .padding(SettingsLayout.inset)
+            AgentsSettingsView(model: model)
         } else {
             ScrollView {
                 Group {
@@ -689,17 +678,53 @@ private struct SettingsWindowChrome: NSViewRepresentable {
 
 private struct SettingsSection<Content: View>: View {
     let title: LocalizedStringKey
+    var expanded: Binding<Bool>?
     @ViewBuilder var content: () -> Content
+
+    init(title: LocalizedStringKey, expanded: Binding<Bool>? = nil, @ViewBuilder content: @escaping () -> Content) {
+        self.title = title
+        self.expanded = expanded
+        self.content = content
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            header
+            if expanded?.wrappedValue ?? true {
+                VStack(spacing: 0, content: content)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.settingsGroup,
+                                in: RoundedRectangle(cornerRadius: SettingsLayout.cornerRadius))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if let expanded {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { expanded.wrappedValue.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Theme.textGhost)
+                        .rotationEffect(.degrees(expanded.wrappedValue ? 90 : 0))
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+                .padding(.horizontal, 10)
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
+            .accessibilityLabel(Text(title))
+            .accessibilityValue(Text(expanded.wrappedValue ? "Expanded" : "Collapsed"))
+        } else {
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 10)
-            VStack(spacing: 0, content: content)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.settingsGroup,
-                            in: RoundedRectangle(cornerRadius: SettingsLayout.cornerRadius))
         }
     }
 }
@@ -990,6 +1015,16 @@ struct AgentsSettingsView: View {
     @State private var drafts: [String: String] = AgentBinaryOverrides.load()
     @State private var disabled: Set<String> = AgentKindDisabled.load()
     @State private var orderedRows: [KindRow] = []
+    @State private var expandedKind: String?
+    @State private var hoveredKind: String?
+    @FocusState private var focusedControl: String?
+    @State private var draggedKind: String?
+    @State private var dropKind: String?
+    @State private var dropAfter = false
+    @State private var pathError = false
+    @State private var checking = false
+    private static let dragType = "dev.eachann.goose-herdr.settings-agent-kind"
+
 
     private struct KindRow: Identifiable, Equatable {
         let kind: String
@@ -1039,7 +1074,10 @@ struct AgentsSettingsView: View {
 
     private func discoveredRows() -> [KindRow] {
         let paths = localCatalogPaths
-        return localCatalogKinds.map { kind in
+        let kinds = Self.knownKinds.map(\.kind) + localCatalogKinds.filter { kind in
+            !Self.knownKinds.contains(where: { $0.kind == kind })
+        }
+        return kinds.map { kind in
             KindRow(
                 kind: kind,
                 label: Self.displayLabel(for: kind),
@@ -1053,15 +1091,8 @@ struct AgentsSettingsView: View {
         // Reloading sets catalog to `.loading` (kinds == []). Don't wipe the list
         // or persist an empty order while that flash is in flight.
         switch model.session(Device.local.id).agentCatalog {
-        case .loading:
-            return
-        case .failed:
-            if orderedRows.isEmpty { return }
-            // Keep last good rows so Settings doesn't go blank on a blip.
-            return
-        case .loaded(let kinds, _) where kinds.isEmpty:
-            orderedRows = []
-            return
+        case .loading, .failed:
+            if !orderedRows.isEmpty { return }
         case .loaded:
             break
         }
@@ -1070,86 +1101,200 @@ struct AgentsSettingsView: View {
         let byKind = Dictionary(uniqueKeysWithValues: discovered.map { ($0.kind, $0) })
         let ordered = AgentKindOrder.sorted(discovered.map(\.kind))
         orderedRows = ordered.compactMap { byKind[$0] }
-        // Order is persisted only from drag (`moveRows`), never from a catalog refresh.
-
+        if let expandedKind, !orderedRows.contains(where: { $0.kind == expandedKind }) {
+            self.expandedKind = nil
+        }
+        // Catalog refresh never persists an order or closes a still-valid expanded row.
 
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if orderedRows.isEmpty {
-                Text(emptyCatalogMessage)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                List {
-                    ForEach(orderedRows) { row in
-                        HStack(alignment: .center, spacing: 8) {
-                            Toggle(isOn: enabledBinding(row.kind)) {
-                                Text("Enable \(row.label)")
-                            }
-                            .toggleStyle(.checkbox)
-                            .labelsHidden()
-
-                            Image(systemName: "line.3.horizontal")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                                .frame(width: 12)
-
-                            Text(row.label)
-                                .font(SettingsLayout.bodyFont)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .layoutPriority(1)
-                                .opacity(disabled.contains(row.kind) ? 0.45 : 1)
-
-                            TextField(
-                                "",
-                                text: binding(row.kind),
-                                prompt: Text(shortPath(row.detectedPath) ?? String(localized: "Automatic"))
-                            )
-                            .font(SettingsLayout.captionFont.monospaced())
-                            .foregroundStyle(.secondary)
-                            .textFieldStyle(.plain)
-                            .multilineTextAlignment(.trailing)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .opacity(disabled.contains(row.kind) ? 0.45 : 1)
-                            .accessibilityLabel(Text("Agent binary path"))
-                            .help(String(localized: "Command or path for \(row.hint). Leave empty to detect."))
-                            .focusEffectDisabled()
-                        }
-                        .frame(height: SettingsLayout.rowHeight)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
-                        .listRowBackground(Theme.settingsGroup)
-                        .listRowSeparatorTint(Theme.hairline)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Agent Applications").font(SettingsLayout.bodyFont.weight(.semibold))
+                        Text("Only enabled Agents appear in shortcuts.")
+                            .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
                     }
-                    .onMove(perform: moveRows)
+                    Spacer(minLength: 4)
+                    if checking { ProgressView().controlSize(.small) }
+                    Button("Check command") { checkCommands() }.disabled(checking)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .environment(\.defaultMinListRowHeight, SettingsLayout.rowHeight)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 0) {
+                    ForEach(orderedRows) { row in
+                        VStack(spacing: 0) {
+                            catalogRow(row)
+                            if expandedKind == row.kind {
+                                rowDetails(row)
+                                    .padding(.horizontal, 16)
+                                    .padding(.bottom, 16)
+                            }
+                            if row.kind != orderedRows.last?.kind {
+                                Rectangle().fill(Theme.hairline).frame(height: 0.5)
+                                    .padding(.leading, 32)
+                            }
+                        }
+                    }
+                }
+                .background(Theme.settingsGroup,
+                            in: RoundedRectangle(cornerRadius: SettingsLayout.cornerRadius))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Refresh policy").font(SettingsLayout.bodyFont.weight(.semibold))
+                    Text("Usage refreshes every 5 minutes for enabled Agents. Cursor also requires read-only authorization.")
+                }
+                .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
             }
+            .padding(SettingsLayout.inset)
         }
-        .padding(.horizontal, 0)
-        .padding(.vertical, 4)
         .onAppear {
             drafts = AgentBinaryOverrides.load()
             disabled = AgentKindDisabled.load()
             syncOrderedRows()
-            // Refresh in background; syncOrderedRows ignores `.loading` so the list stays.
-            model.reloadAgentCatalog(deviceID: Device.local.id)
+            checkCommands()
         }
-        .onChange(of: catalogSignature) { _, _ in
+        .onChange(of: catalogSignature) { _, _ in syncOrderedRows() }
+        .onChange(of: expandedKind) { _, _ in pathError = false }
+    }
+
+    private func checkCommands() {
+        guard !checking else { return }
+        checking = true
+        let task = model.reloadAgentCatalog(deviceID: Device.local.id)
+        Task { @MainActor in
+            await task?.value
             syncOrderedRows()
+            checking = false
         }
-        .onChange(of: drafts) { _, _ in commit() }
-        .onDisappear(perform: commit)
-        .onSubmit(commit)
+    }
+
+    private func catalogRow(_ row: KindRow) -> some View {
+        let showTools = hoveredKind == row.kind || focusedControl?.hasPrefix(row.kind + ".") == true
+        return HStack(spacing: 8) {
+            Image(systemName: "line.3.horizontal")
+                .font(SettingsLayout.captionFont)
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 16, height: SettingsLayout.agentRowHeight)
+                .contentShape(Rectangle())
+                .onDrag {
+                    draggedKind = row.kind
+                    return NSItemProvider(item: row.kind as NSString, typeIdentifier: Self.dragType)
+                }
+                .opacity(showTools ? 1 : 0)
+                .help("Drag to reorder Agents.")
+                .accessibilityHidden(true)
+            Button {
+                expandedKind = expandedKind == row.kind ? nil : row.kind
+            } label: {
+                HStack(spacing: 8) {
+                    BrandIcon(resource: BrandIconLoader.agentIcon(for: row.kind) ?? row.kind, size: 16)
+                        .accessibilityHidden(true)
+                    Text(verbatim: row.label).font(SettingsLayout.bodyFont).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(checking ? "Checking command…" : row.detectedPath == nil ? "Command not found" : "Command available")
+                        .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                    Image(systemName: expandedKind == row.kind ? "chevron.down" : "chevron.right")
+                        .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: SettingsLayout.agentRowHeight, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .focused($focusedControl, equals: row.kind + ".details")
+            .accessibilityValue(Text(expandedKind == row.kind ? "Agent details expanded" : "Agent details collapsed"))
+            Toggle("Enable \(row.label)", isOn: enabledBinding(row.kind))
+                .toggleStyle(.switch).labelsHidden().controlSize(.small)
+                .focused($focusedControl, equals: row.kind + ".enabled")
+        }
+        .padding(.horizontal, 8)
+        .background(focusedControl?.hasPrefix(row.kind + ".") == true ? Theme.itemWash : .clear,
+                    in: RoundedRectangle(cornerRadius: SettingsLayout.iconRadius))
+        .onHover { hoveredKind = $0 ? row.kind : nil }
+        .overlay(alignment: dropAfter ? .bottom : .top) {
+            if dropKind == row.kind { Rectangle().fill(Theme.settingsAccent).frame(height: 1) }
+        }
+        .onDrop(of: [Self.dragType], delegate: AgentSettingsDropDelegate(
+            kind: row.kind, rowHeight: SettingsLayout.agentRowHeight,
+            dragged: $draggedKind, target: $dropKind, after: $dropAfter,
+            move: reorder))
+        .contextMenu {
+            Button("Move Agent up") { move(row.kind, by: -1) }
+                .disabled(orderedRows.first?.kind == row.kind)
+            Button("Move Agent down") { move(row.kind, by: 1) }
+                .disabled(orderedRows.last?.kind == row.kind)
+        }
+    }
+
+    private func rowDetails(_ row: KindRow) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("CLI command").font(SettingsLayout.bodyFont.weight(.semibold))
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Command or executable path").font(SettingsLayout.captionFont)
+                    TextField("", text: binding(row.kind), prompt: Text(verbatim: row.hint))
+                        .font(SettingsLayout.bodyFont.monospaced())
+                        .textFieldStyle(.roundedBorder)
+                        .accessibilityLabel(Text("Agent binary path"))
+                        .onSubmit { commit(row.kind) }
+                    Text("Leave empty for automatic detection. Apply or press Return to save.")
+                        .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                    HStack {
+                        Button("Apply path") { commit(row.kind) }.disabled(checking)
+                        Button("Check command") { checkCommands() }
+                            .disabled(checking)
+                        if checking { ProgressView().controlSize(.small) }
+                    }
+                    if pathError {
+                        Text("Enter a command name or absolute path, without arguments or line breaks.")
+                            .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                    }
+                    Text(checking ? "Checking command…" : row.detectedPath == nil ? "Command not found" : "Command available")
+                        .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                    if !checking, case .failed = model.session(Device.local.id).agentCatalog {
+                        Text("Command check failed. Showing the last detection.")
+                            .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                    }
+                    if let path = shortPath(row.detectedPath) {
+                        Text(verbatim: path).font(SettingsLayout.captionFont.monospaced())
+                            .foregroundStyle(Theme.textSecondary).textSelection(.enabled)
+                    }
+                }
+            }
+            Rectangle().fill(Theme.hairline).frame(height: 0.5)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Usage account").font(SettingsLayout.bodyFont.weight(.semibold))
+                VStack(alignment: .leading, spacing: 12) {
+                    if row.kind == "cursor" {
+                        Text(NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.todesktop.230313mzl4w4u92") == nil ? "Cursor app not detected" : "Cursor app detected")
+                            .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+                        CursorUsageAccountView(usage: model.usage, enabled: !disabled.contains(row.kind))
+                    } else if UsagePanelModel.availableProviders.contains(row.kind) {
+                        Text("Usage follows this Agent’s existing local sign-in. Check the usage menu for current results.")
+                    } else {
+                        Text("Usage is not supported for this Agent. Its command can still be used independently.")
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if disabled.contains(row.kind) {
+                Text("Agent disabled · no shortcuts or background usage queries.")
+                    .font(SettingsLayout.captionFont).foregroundStyle(Theme.textSecondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func move(_ kind: String, by delta: Int) {
+        guard let index = orderedRows.firstIndex(where: { $0.kind == kind }),
+              orderedRows.indices.contains(index + delta) else { return }
+        moveRows(from: IndexSet(integer: index), to: delta > 0 ? index + 2 : index - 1)
+    }
+
+    private func reorder(_ source: String, _ target: String, _ after: Bool) {
+        guard source != target,
+              let from = orderedRows.firstIndex(where: { $0.kind == source }),
+              let to = orderedRows.firstIndex(where: { $0.kind == target }) else { return }
+        moveRows(from: IndexSet(integer: from), to: to + (after ? 1 : 0))
     }
 
     private func shortPath(_ path: String?) -> String? {
@@ -1161,25 +1306,24 @@ struct AgentsSettingsView: View {
         return path
     }
 
-    private var emptyCatalogMessage: String {
-        switch model.session(Device.local.id).agentCatalog {
-        case .loading:
-            return String(localized: "Checking installed agent CLIs…")
-        case .failed(let message):
-            return String(localized: "Couldn’t detect agents: \(message)")
-        case .loaded:
-            return String(localized: "No agent CLI found on this Mac.")
-        }
-    }
-
     private func moveRows(from source: IndexSet, to destination: Int) {
         orderedRows.move(fromOffsets: source, toOffset: destination)
         AgentKindOrder.save(orderedRows.map(\.kind))
     }
 
-    private func commit() {
-        AgentBinaryOverrides.save(drafts)
-        model.reloadAgentCatalog(deviceID: Device.local.id)
+    private func commit(_ kind: String) {
+        let path = (drafts[kind] ?? "").trimmingCharacters(in: .whitespaces)
+        guard !path.contains(where: { $0.isNewline }),
+              path.isEmpty || path.hasPrefix("/") || path.hasPrefix("~/") || !path.contains(where: { $0.isWhitespace }) else {
+            pathError = true
+            return
+        }
+        pathError = false
+        drafts[kind] = path
+        var saved = AgentBinaryOverrides.load()
+        saved[kind] = path
+        AgentBinaryOverrides.save(saved)
+        checkCommands()
     }
 
     private func binding(_ kind: String) -> Binding<String> {
@@ -1199,8 +1343,33 @@ struct AgentsSettingsView: View {
                     disabled.insert(kind)
                 }
                 AgentKindDisabled.save(disabled)
+                model.usage.configure()
             }
         )
+    }
+}
+
+private struct AgentSettingsDropDelegate: DropDelegate {
+    let kind: String
+    let rowHeight: CGFloat
+    @Binding var dragged: String?
+    @Binding var target: String?
+    @Binding var after: Bool
+    let move: (String, String, Bool) -> Void
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard dragged != nil, dragged != kind else { target = nil; return nil }
+        target = kind
+        after = info.location.y > rowHeight / 2
+        return DropProposal(operation: .move)
+    }
+    func dropExited(info: DropInfo) { if target == kind { target = nil } }
+    func performDrop(info: DropInfo) -> Bool {
+        guard let source = dragged else { return false }
+        move(source, kind, info.location.y > rowHeight / 2)
+        dragged = nil
+        target = nil
+        return true
     }
 }
 
