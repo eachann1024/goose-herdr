@@ -230,7 +230,7 @@ struct SearchSheet: View {
                 Spacer(minLength: 8)
                 trailing(
                     empty
-                        ? String(localized: "No terminals — click to create one")
+                        ? String(localized: "No terminals")
                         : String(localized: "Space · \(model.agentCount(in: entry)) agents"),
                     device: entry.device
                 )
