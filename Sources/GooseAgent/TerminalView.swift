@@ -97,9 +97,21 @@ enum TerminalDefaults {
 @MainActor
 enum GhosttyRuntime {
     static let controller = TerminalController(
-        configSource: .none,
+        configSource: appearanceConfigSource,
         theme: makeTheme()
     )
+
+    static var appearanceConfigSource: TerminalController.ConfigSource {
+        guard let light = Bundle.main.url(forResource: "TerminalLight", withExtension: "ghostty"),
+              let dark = Bundle.main.url(forResource: "TerminalDark", withExtension: "ghostty") else {
+            preconditionFailure("Missing bundled terminal appearance markers")
+        }
+        // ponytail: libghostty 1.6 only updates CSI 996/2031's scheme when the
+        // config has distinct conditional themes. Remove once upstream fixes
+        // reporting for unconditional configs; actual colors stay in makeTheme.
+        return .generated(TerminalConfiguration.default.rendered
+            + "\ntheme = light:\(light.path),dark:\(dark.path)\n")
+    }
 
     /// Font settings are hot-applied; surfaces pick the change up without a
     /// rebuild, so this runs from every view update — the controller dedupes.
@@ -177,6 +189,8 @@ enum GhosttyRuntime {
         let dark = TerminalConfiguration { builder in
             builder.withBackground(TerminalDefaults.darkBackgroundHex)
             builder.withForeground(TerminalDefaults.darkForegroundHex)
+            builder.withSelectionBackground(Theme.accentHex(dark: true))
+            builder.withSelectionForeground(TerminalDefaults.darkBackgroundHex)
             for (index, color) in TerminalDefaults.darkPalette.enumerated() {
                 builder.withPalette(index, color: hex(color))
             }
@@ -184,6 +198,8 @@ enum GhosttyRuntime {
         let light = TerminalConfiguration { builder in
             builder.withBackground(TerminalDefaults.lightBackgroundHex)
             builder.withForeground(TerminalDefaults.lightForegroundHex)
+            builder.withSelectionBackground(Theme.accentHex(dark: false))
+            builder.withSelectionForeground(TerminalDefaults.lightBackgroundHex)
             for (index, color) in TerminalDefaults.lightPalette.enumerated() {
                 builder.withPalette(index, color: hex(color))
             }
@@ -198,11 +214,25 @@ enum GhosttyRuntime {
 
 /// The child's complete environment: TERM/COLORTERM/LANG plus the few user
 /// variables terminal programs expect, with the command's own variables
-/// winning. Matches what `Terminal.getEnvironmentVariables` produced for the
-/// SwiftTerm embed — the child deliberately does NOT inherit the app's sparse
-/// launch environment; HerdrService supplies PATH & friends itself.
-private func terminalEnvironment(_ commandEnvironment: [String: String]) -> [String] {
-    var environment = ["TERM=xterm-256color", "COLORTERM=truecolor", "LANG=en_US.UTF-8"]
+/// winning except for the renderer identity and startup appearance hint. Matches
+/// what `Terminal.getEnvironmentVariables` produced for the SwiftTerm embed —
+/// the child deliberately does NOT inherit the app's sparse launch environment;
+/// HerdrService supplies PATH & friends itself.
+///
+/// `TERM_PROGRAM=ghostty` identifies the actual renderer; the portable
+/// `TERM=xterm-256color` also works on SSH hosts without Ghostty's terminfo.
+/// Cmd+D local splits spawn this PTY instead of `herdr attach`; the identity keeps
+/// agent TUIs' Kitty graphics and OSC 8 hyperlink paths enabled by their allowlists.
+private func terminalEnvironment(
+    _ commandEnvironment: [String: String],
+    dark: Bool
+) -> [String] {
+    var environment = [
+        "TERM=xterm-256color",
+        "COLORTERM=truecolor",
+        "LANG=en_US.UTF-8",
+        "TERM_PROGRAM=ghostty",
+    ]
     let launch = ProcessInfo.processInfo.environment
     for key in ["LOGNAME", "USER", "DISPLAY", "LC_TYPE", "HOME"] {
         if let value = launch[key] {
@@ -212,6 +242,27 @@ private func terminalEnvironment(_ commandEnvironment: [String: String]) -> [Str
     for (key, value) in commandEnvironment {
         environment.removeAll { $0.hasPrefix("\(key)=") }
         environment.append("\(key)=\(value)")
+    }
+    // Keep the terminal identity authoritative even when a cached login shell
+    // contains values for another emulator. COLORFGBG is a startup hint only;
+    // the child environment cannot be changed after exec, so later appearance
+    // changes use Ghostty's native scheme API.
+    for entry in [
+        "TERM=xterm-256color",
+        "COLORTERM=truecolor",
+        "TERM_PROGRAM=ghostty",
+        "COLORFGBG=\(dark ? "15;0" : "0;15")",
+    ] {
+        let key = entry.prefix(while: { $0 != "=" })
+        environment.removeAll { $0.hasPrefix("\(key)=") }
+        environment.append(entry)
+    }
+    // The package owns Ghostty's shell integration resources. Pass the path to
+    // children only when the bundle really contains it; never invent a path.
+    environment.removeAll { $0.hasPrefix("GHOSTTY_RESOURCES_DIR=") }
+    if let path = GhosttyRuntimeResources.directoryURL?.path,
+       FileManager.default.fileExists(atPath: path) {
+        environment.append("GHOSTTY_RESOURCES_DIR=\(path)")
     }
     return environment
 }
@@ -251,11 +302,11 @@ final class TerminalProcessHost {
         process.onExit = { [weak self] code in self?.onExit?(code) }
     }
 
-    func start(command: TerminalCommand) {
+    func start(command: TerminalCommand, dark: Bool) {
         process.start(
             executable: command.executable,
             args: command.args,
-            environment: terminalEnvironment(command.environment)
+            environment: terminalEnvironment(command.environment, dark: dark)
         )
     }
 
@@ -872,6 +923,7 @@ struct AttachTerminalView: NSViewRepresentable {
         let view = LineBreakTerminalView(frame: .zero)
         view.processHost = host
         view.onFocus = onFocus
+        view.inputSuppressed = inputSuppressed
         configurePasteHandling(view)
         context.coordinator.view = view
         context.coordinator.host = host
@@ -890,7 +942,7 @@ struct AttachTerminalView: NSViewRepresentable {
         let command = service.attachCommand(target: target, serverVersion: serverVersion)
         context.coordinator.authorizationID = command.authorizationID
         context.coordinator.scheduleAuthorizationCleanup()
-        host.start(command: command)
+        host.start(command: command, dark: dark)
         if let sessionID {
             AttachViewRegistry.register(view, for: sessionID)
         }
@@ -905,6 +957,10 @@ struct AttachTerminalView: NSViewRepresentable {
 
     func updateNSView(_ nsView: LineBreakTerminalView, context: Context) {
         nsView.onFocus = onFocus
+        nsView.inputSuppressed = inputSuppressed
+        if inputSuppressed, nsView.window?.firstResponder === nsView {
+            nsView.window?.makeFirstResponder(nil)
+        }
         configurePasteHandling(nsView)
         context.coordinator.onExit = onExit
         configureAppearance(nsView)
@@ -997,6 +1053,10 @@ func applyTerminalAppearance(
         lineSpacing: lineSpacing
     )
     view.mouseReportingEnabled = mouseReporting
+    // SwiftUI's scheme must reach the surface, not just the shared controller:
+    // Ghostty answers CSI 996 using each surface's conditional theme state.
+    view.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+    GhosttyRuntime.controller.setColorScheme(dark ? .dark : .light)
     // Colors are theme-only; keep the rest above this early return.
     guard view.appliedDarkAppearance != dark else { return }
     view.appliedDarkAppearance = dark
@@ -1110,7 +1170,7 @@ struct ShellTerminalView: NSViewRepresentable {
             .terminalCommand(workingDirectory: workingDirectory)
         context.coordinator.authorizationID = command.authorizationID
         context.coordinator.scheduleAuthorizationCleanup()
-        host.start(command: command)
+        host.start(command: command, dark: dark)
         if let sessionID {
             ShellViewRegistry.register(view, for: sessionID)
         }

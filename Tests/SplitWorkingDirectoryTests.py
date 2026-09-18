@@ -30,6 +30,13 @@ assert "?? splitShells.first" in model_source, "unmounted new leaves inherit the
 assert "terminalCommand(workingDirectory: workingDirectory)" in (
     root / "Sources/GooseAgent/TerminalView.swift"
 ).read_text(), "ShellTerminalView must forward its workingDirectory to the command"
+terminal_view = (root / "Sources/GooseAgent/TerminalView.swift").read_text()
+env = terminal_view[terminal_view.index("private func terminalEnvironment"):terminal_view.index("return environment")]
+assert '"TERM_PROGRAM=ghostty"' in env, (
+    "Cmd+D local PTYs must advertise Ghostty so agent TUIs enable native protocols"
+)
+assert '"TERM=xterm-256color"' in env, "PTYs must remain usable on SSH hosts without Ghostty terminfo"
+assert "COLORFGBG=" in env, "local PTYs must receive the initial appearance hint"
 
 harness = r'''
 import Foundation
