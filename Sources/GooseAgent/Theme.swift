@@ -45,6 +45,11 @@ enum Theme {
     static let warning = dynamic(hex(0xB8862E), hex(0xE0B36A))
     static let danger = dynamic(hex(0xC94F44), hex(0xE2726A))
 
+    // Muted hues keep the launch veil quiet; each transition retains its own sample.
+    static func randomPiLaunchInk() -> Color {
+        Color(hue: Double.random(in: 0..<1), saturation: 0.16, brightness: 0.62)
+    }
+
     // surfaces
     static let itemWash = dynamic(hex(0x141414, alpha: 0.06), hex(0xF0F0F0, alpha: 0.06))
     static let itemWashSelected = dynamic(hex(0x141414, alpha: 0.07), hex(0xF0F0F0, alpha: 0.07))
