@@ -2504,70 +2504,127 @@ final class AppModel: ObservableObject {
     func createNewSpace(device: Device, directory: String, label: String?) {
         Task {
             do {
-                let service = service(for: device)
-                var path = directory.trimmingCharacters(in: .whitespaces)
-                // The browser leaves paths slash-terminated; herdr wants them bare.
-                while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
-                if path.isEmpty { path = "~" }
-                path = try await service.absolutePath(path)
-                let trimmedLabel = label?.trimmingCharacters(in: .whitespaces)
-                let created = try await service.createWorkspace(
-                    label: (trimmedLabel?.isEmpty ?? true) ? nil : trimmedLabel,
-                    cwd: path
-                )
-                await refresh(device.id)
-                isFileManagerActive = false
-                selectedSpace = SpaceRef(deviceID: device.id, workspaceID: created.workspaceID)
-                selectedPane = created.rootPaneID.map { PaneRef(deviceID: device.id, paneID: $0) }
-                    ?? firstVisiblePaneRef
-                selectedShellID = nil
+                revealCreatedSpace(try await createSpace(device: device, directory: directory, label: label))
             } catch {
                 actionError = actionErrorMessage(error, device: device)
             }
         }
     }
 
+    /// The New Session sheet creates a space in place, so it keeps the root shell
+    /// too: confirming a session right afterwards opens in that shell instead of
+    /// adding a tab beside it.
+    func createSpace(device: Device, directory: String, label: String?) async throws -> CreatedSpace {
+        let service = service(for: device)
+        var path = directory.trimmingCharacters(in: .whitespaces)
+        // The browser leaves paths slash-terminated; herdr wants them bare.
+        while path.count > 1 && path.hasSuffix("/") { path.removeLast() }
+        if path.isEmpty { path = "~" }
+        path = try await service.absolutePath(path)
+        let trimmedLabel = label?.trimmingCharacters(in: .whitespaces)
+        let created = try await service.createWorkspace(
+            label: (trimmedLabel?.isEmpty ?? true) ? nil : trimmedLabel,
+            cwd: path
+        )
+        await refresh(device.id)
+        return CreatedSpace(
+            ref: SpaceRef(deviceID: device.id, workspaceID: created.workspaceID),
+            rootPaneID: created.rootPaneID
+        )
+    }
+
+    func revealCreatedSpace(_ created: CreatedSpace) {
+        isFileManagerActive = false
+        selectedSpace = created.ref
+        selectedPane = created.rootPaneID.map { PaneRef(deviceID: created.ref.deviceID, paneID: $0) }
+            ?? firstVisiblePaneRef
+        selectedShellID = nil
+    }
+
     /// Creates a persistent shell tab on the selected Herdr device. Local and
     /// remote terminals use the same server-owned lifecycle and can be detached
     /// and reattached without killing the shell process.
-    /// Create a terminal in the current space (or a standalone shell if none).
+    /// ⌘T asks for a space only in All Spaces or Priority sessions. A selected
+    /// space creates the terminal there. An active standalone shell retains
+    /// its independent “new shell” behaviour.
     func quickNewTerminal() {
         if let shell = selectedShell, !isFilteredOut(shell.device.id) {
             newShellSession(on: shell.device)
             return
         }
-        if let space = selectedSpace, !isFilteredOut(space.deviceID), let device = device(space.deviceID) {
-            startNewTerminal(device: device, workspaceID: space.workspaceID)
+        if asksForNewSessionSpace {
+            newSession = .terminal
             return
         }
-        if let attached = selectedAttachedEntry, !isFilteredOut(attached.device.id) {
-            startNewTerminal(device: attached.device, workspaceID: attached.workspaceID)
-            return
-        }
-        let device = deviceFilter.flatMap { self.device($0) } ?? devices.first ?? .local
-        newShellSession(on: device)
+        createNewSession(in: selectedSpace, type: .terminal)
     }
 
-    /// Explicit per-kind commands start an agent without a picker.
+    /// The sheet is for All Spaces and Priority sessions. A selected space
+    /// that is still in the live list is already the destination.
+    var asksForNewSessionSpace: Bool {
+        if prioritySessionsEnabled { return true }
+        guard let space = selectedSpace,
+              visibleSpaces.contains(where: { $0.ref == space }) else {
+            return true
+        }
+        return false
+    }
+
+    /// Space the sheet preselects: the focused session's space beats the
+    /// remembered filter, because entering Priority sessions keeps the filter
+    /// from before and the two can disagree. With neither there is no honest
+    /// default — an unfilled selection makes the user pick, rather than landing
+    /// in whichever space happens to be listed first.
+    var newSessionDefaultSpace: SpaceRef? {
+        let spaces = visibleSpaces
+        if selectedShell == nil, let attached = selectedAttachedEntry {
+            let ref = SpaceRef(deviceID: attached.device.id, workspaceID: attached.workspaceID)
+            if spaces.contains(where: { $0.ref == ref }) { return ref }
+        }
+        if let space = selectedSpace, spaces.contains(where: { $0.ref == space }) { return space }
+        return nil
+    }
+
+    /// Sheet confirm. Re-resolves the space against the live list, so a space
+    /// that closed while the sheet was open creates nothing instead of silently
+    /// landing in another one. `rootPaneID` is the root shell of a space the
+    /// sheet itself just created.
+    func createNewSession(in ref: SpaceRef?, type: NewSessionType, rootPaneID: String? = nil) {
+        guard let ref, let entry = visibleSpaces.first(where: { $0.ref == ref }) else { return }
+        switch type {
+        case .choose:
+            return
+        case .terminal:
+            startNewTerminal(
+                device: entry.device,
+                workspaceID: entry.workspace.workspaceID,
+                rootPaneID: rootPaneID
+            )
+        case .agent(let kind):
+            startNewAgent(
+                device: entry.device,
+                kind: kind,
+                workspaceID: entry.workspace.workspaceID,
+                bypass: agentBypass(for: kind),
+                rootPaneID: rootPaneID
+            )
+        }
+    }
+
+    /// `agent.bypassDefault` gates the kind's known skip-permissions flag.
+    func agentBypass(for kind: String) -> Bool {
+        let enabled = UserDefaults.standard.object(forKey: "agent.bypassDefault") as? Bool ?? true
+        return enabled && (HerdrService.bypassFlags(for: kind) != nil)
+    }
+
+    /// Explicit per-kind commands fix the kind. All Spaces and Priority
+    /// sessions still ask for the space; a selected space launches there.
     func quickNewAgent(kind: String) {
-        let device: Device
-        let workspaceID: String?
-        if let space = selectedSpace, !isFilteredOut(space.deviceID), let d = self.device(space.deviceID) {
-            device = d
-            workspaceID = space.workspaceID
-        } else if let attached = selectedAttachedEntry, !isFilteredOut(attached.device.id) {
-            device = attached.device
-            workspaceID = attached.workspaceID
-        } else {
+        if asksForNewSessionSpace {
+            newSession = .agent(kind)
             return
         }
-        let bypass = UserDefaults.standard.object(forKey: "agent.bypassDefault") as? Bool ?? true
-        startNewAgent(
-            device: device,
-            kind: kind,
-            workspaceID: workspaceID,
-            bypass: bypass && (HerdrService.bypassFlags(for: kind) != nil)
-        )
+        createNewSession(in: selectedSpace, type: .agent(kind))
     }
 
     /// Select the new pane. All Spaces (`selectedSpace == nil`) stays put.
@@ -2581,7 +2638,11 @@ final class AppModel: ObservableObject {
         requestCreatedSessionFocus()
     }
 
-    func startNewTerminal(device: Device, workspaceID: String) {
+    /// `rootPaneID` is herdr's root shell of a space the New Session sheet just
+    /// created, so opening the terminal means revealing that shell instead of
+    /// adding a tab beside it. A root that is gone by now — closed, or taken over
+    /// by an agent — falls back to a normal tab.
+    func startNewTerminal(device: Device, workspaceID: String, rootPaneID: String? = nil) {
         let ref = SpaceRef(deviceID: device.id, workspaceID: workspaceID)
         if isRetainedSpace(ref) {
             reviveRetainedSpace(ref)
@@ -2589,11 +2650,24 @@ final class AppModel: ObservableObject {
         }
         Task {
             do {
-                let paneID = try await service(for: device).createTab(
-                    workspaceID: workspaceID,
-                    cwd: nil,
-                    label: nil
-                )
+                let service = service(for: device)
+                var rootShell: String?
+                if let rootPaneID {
+                    await refresh(device.id)
+                    if canReuseRootPane(deviceID: device.id, workspaceID: workspaceID, paneID: rootPaneID) {
+                        rootShell = rootPaneID
+                    }
+                }
+                let paneID: String
+                if let rootShell {
+                    paneID = rootShell
+                } else {
+                    paneID = try await service.createTab(
+                        workspaceID: workspaceID,
+                        cwd: nil,
+                        label: nil
+                    )
+                }
                 await refresh(device.id)
                 revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: paneID)
             } catch {
@@ -2605,38 +2679,74 @@ final class AppModel: ObservableObject {
     /// New Agent: a fresh tab in the space plus agent.start. Agent names are
     /// session-global in herdr, so collisions retry with a unique suffix.
     /// `bypass` appends the kind's skip-permissions flag when one is known.
+    /// `rootPaneID` is the root shell of a space the New Session sheet just
+    /// created: the agent starts in it, and a failed launch leaves it in place
+    /// because it is not a pane this call opened.
     func startNewAgent(
         device: Device,
         kind: String,
         workspaceID: String?,
-        bypass: Bool
+        bypass: Bool,
+        rootPaneID: String? = nil
     ) {
         let args = bypass ? (HerdrService.bypassFlags(for: kind) ?? []) : []
+        let launch: PiLaunch? = kind == "pi" ? PiLaunch(deviceID: device.id) : nil
+        if let launch {
+            NSApp.keyWindow?.makeFirstResponder(nil)
+            isFileManagerActive = false
+            selectedShellID = nil
+            selectedPane = nil
+            piLaunch = launch
+        }
         Task {
             let service = service(for: device)
+            // Closed again when the launch fails: a tab this call opened, or the
+            // root shell herdr revived with a retained space. A space created
+            // moments ago keeps its own root shell — see `newSpaceRoot`.
             var createdPane: String?
+            // herdr's root shell of a space created moments ago; never closed here.
+            var newSpaceRoot: String?
             do {
                 var workspaceID = workspaceID
-                var reusePane: String?
-                if let current = workspaceID,
+                if let rootPaneID, let current = workspaceID {
+                    await refresh(device.id)
+                    if canReuseRootPane(deviceID: device.id, workspaceID: current, paneID: rootPaneID) {
+                        newSpaceRoot = rootPaneID
+                    }
+                }
+                var revivedRoot: String?
+                if newSpaceRoot == nil, let current = workspaceID,
                    let revived = try await reviveRetainedWorkspace(
                     device: device,
                     workspaceID: current
                    ) {
                     workspaceID = revived.workspaceID
-                    reusePane = revived.rootPaneID
+                    revivedRoot = revived.rootPaneID
                 }
                 let pane: String
-                if let reusePane {
-                    pane = reusePane
+                if let newSpaceRoot {
+                    pane = newSpaceRoot
+                } else if let revivedRoot {
+                    pane = revivedRoot
+                    createdPane = pane
                 } else {
                     pane = try await service.createTab(
                         workspaceID: workspaceID,
                         cwd: nil,
                         label: kind
                     )
+                    createdPane = pane
                 }
-                createdPane = pane
+                let paneRef = PaneRef(deviceID: device.id, paneID: pane)
+                startingPanes.insert(paneRef)
+                defer { startingPanes.remove(paneRef) }
+                if let launch, piLaunch?.id == launch.id {
+                    piLaunch?.pane = paneRef
+                    await refresh(device.id)
+                    if piLaunch?.id == launch.id, piLaunch?.presented == true {
+                        revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: pane)
+                    }
+                }
                 do {
                     try await service.startAgent(
                         name: kind,
@@ -2655,15 +2765,31 @@ final class AppModel: ObservableObject {
                         waitForShell: true
                     )
                 }
+                let ready = await service.waitForStartedAgent(kind: kind, paneID: pane)
                 await refresh(device.id)
-                revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: pane)
+                if let launch {
+                    guard piLaunch?.id == launch.id else { return }
+                    piLaunch?.ready = ready
+                    piLaunch?.failed = !ready
+                } else {
+                    revealCreatedSession(deviceID: device.id, workspaceID: workspaceID, paneID: pane)
+                }
             } catch {
+                if let launch, piLaunch?.id == launch.id { piLaunch = nil }
                 if let createdPane {
                     try? await service.closePane(paneID: createdPane)
                 }
                 actionError = actionErrorMessage(error, device: device)
             }
         }
+    }
+
+    /// A root shell may be reused only while it is still a plain terminal of that
+    /// same workspace. `panes` holds exactly the agent-free attachable panes, so
+    /// a root that has since taken an agent falls back to a fresh tab rather than
+    /// hijacking someone else's pane.
+    private func canReuseRootPane(deviceID: UUID, workspaceID: String, paneID: String) -> Bool {
+        session(deviceID).panes.contains { $0.paneID == paneID && $0.workspaceID == workspaceID }
     }
 
     // MARK: - Retained empty spaces
