@@ -257,6 +257,29 @@ final class AppModel: ObservableObject {
     @Published var splitShells: [SplitShell] = []
     @Published var pendingSplitAgentFocus = false
     @Published var pendingCreatedSessionFocus = false
+    /// `createTab` is visible before `agent.start` finishes. Refresh must not
+    /// auto-select these, or the shortcut lands on a shell with `pi` typed.
+    @Published private(set) var startingPanes: Set<PaneRef> = []
+
+    struct PiLaunch: Identifiable {
+        let id = UUID()
+        let deviceID: UUID
+        var pane: PaneRef?
+        var presented = true
+        var ready = false
+        var revealed = false
+        var failed = false
+    }
+    @Published var piLaunch: PiLaunch?
+    var showsPiLaunch: Bool {
+        piLaunch?.presented == true && !isFileManagerActive && selectedShellID == nil
+    }
+
+    func finishPiLaunch(_ id: UUID) {
+        guard piLaunch?.id == id else { return }
+        piLaunch = nil
+        requestCreatedSessionFocus()
+    }
     var splitAgentView: LineBreakTerminalView? {
         selectedAttachedEntry.flatMap { AttachViewRegistry.view(for: $0.id) }
     }
